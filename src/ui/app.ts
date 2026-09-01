@@ -8,6 +8,7 @@ import { Timeline } from '../debug/timeline';
 import { renderGfx } from '../debug/memview';
 import { profileFrame } from '../debug/profiler';
 import { instructionCost, formatCost } from '../debug/timing';
+import { screenAddressAt } from '../debug/screen';
 import { DEMO_SOURCE } from '../demo';
 import { EXAMPLES } from '../examples';
 import { withAmsdosHeader, makeDsk, makeCdt } from '../export';
@@ -343,6 +344,30 @@ export function startApp(opts: AppOptions = {}): void {
     need(id).addEventListener('input', renderGfxView);
   }
   gfxDetails.addEventListener('toggle', renderGfxView);
+
+  // --- screen-address helper -------------------------------------
+  const screenInfo = need('screen-info');
+  const screenInfoDefault = screenInfo.textContent ?? '';
+  const hx = (n: number, d = 2) => n.toString(16).toUpperCase().padStart(d, '0');
+  canvas.addEventListener('mousemove', (e) => {
+    const cx = e.offsetX * (canvas.width / (canvas.clientWidth || canvas.width));
+    const cy = e.offsetY * (canvas.height / (canvas.clientHeight || canvas.height));
+    const hit = screenAddressAt(machine, cx, cy);
+    screenInfo.textContent = hit
+      ? `&${hx(hit.addr, 4)} = ${hx(hit.byteValue)} · mode ${hit.mode} · pixel ${hit.pixelInByte + 1}/${hit.pixelsPerByte} · row ${hit.row} col ${hit.byteCol}`
+      : screenInfoDefault;
+  });
+  canvas.addEventListener('mouseleave', () => { screenInfo.textContent = screenInfoDefault; });
+  canvas.addEventListener('click', (e) => {
+    const cx = e.offsetX * (canvas.width / (canvas.clientWidth || canvas.width));
+    const cy = e.offsetY * (canvas.height / (canvas.clientHeight || canvas.height));
+    const hit = screenAddressAt(machine, cx, cy);
+    if (hit) {
+      need<HTMLInputElement>('dbg-addr').value = '&' + hx(hit.addr, 4);
+      renderDebug();
+      status(`Screen byte &${hx(hit.addr, 4)} sent to the memory view.`);
+    }
+  });
 
   // --- frame-budget profiler --------------------------------------
   need('prof-measure').addEventListener('click', () => {

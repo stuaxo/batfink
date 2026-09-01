@@ -151,6 +151,23 @@ describe('playground wiring', () => {
     }
   });
 
+  it('hovering the screen shows the byte address; clicking sends it to the memory view', () => {
+    boot();
+    const canvas = document.getElementById('screen') as HTMLCanvasElement;
+    const info = document.getElementById('screen-info')!;
+    const move = new MouseEvent('mousemove');
+    Object.defineProperty(move, 'offsetX', { value: 48 });
+    Object.defineProperty(move, 'offsetY', { value: 48 });
+    canvas.dispatchEvent(move);
+    expect(info.textContent).toMatch(/&[0-9A-F]{4} = [0-9A-F]{2} · mode/);
+
+    const click = new MouseEvent('click');
+    Object.defineProperty(click, 'offsetX', { value: 48 });
+    Object.defineProperty(click, 'offsetY', { value: 48 });
+    canvas.dispatchEvent(click);
+    expect((document.getElementById('dbg-addr') as HTMLInputElement).value).toMatch(/^&C0/);
+  });
+
   it('the frame-budget profiler produces a breakdown', () => {
     boot();
     document.getElementById('prof-measure')!.dispatchEvent(new Event('click'));

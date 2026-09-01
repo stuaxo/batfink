@@ -10,13 +10,13 @@
   so listings that use firmware calls (most non-demoscene code) run.
 - Cassette `RUN"` for `.cdt` (via the firmware's own tape routines).
 
-## The size of this
+## Where this got to
 
 The spike ([`rom-boot-findings.md`](rom-boot-findings.md)) settled the open
-question: the 464 firmware boots to `Ready` and takes keyboard input on the
-hardware model we already have, with only ROM paging added. Getting BASIC
-running is now small. The bulk of the remaining work is the **disc** side — a
-µPD765A FDC and AMSDOS — so an exported `.dsk` can be `RUN"` in-app.
+question: the 464 firmware boots to `Ready` on the hardware model we already
+had, with only ROM paging added. BASIC checks out; a minimal FDC
+([`fdc.md`](fdc.md)) lets AMSDOS `CAT` and `RUN"` an exported `.dsk`. All that
+is left is a UI to mount a disc, plus cassette.
 
 ## Which machine
 
@@ -130,11 +130,13 @@ Rough; re-plan after the spike.
    — `PRINT` + expressions, entering and `RUN`ning a program with a `GOTO` loop,
    `INK`/`BORDER`, firmware `SOUND`, and `CALL`ing poked machine code all work.
    Nothing to fix.
-5. **Minimal FDC 765** — `src/cpc/fdc.ts` + a `.dsk` sector reader. Design and
-   the traced AMSDOS command sequence: [`fdc.md`](fdc.md). Tests against a `.dsk`
-   we build ourselves: Read ID, Seek, Read Data return the right bytes.
-6. **AMSDOS + mount** — AMSDOS as ROM 7; a "mount disc" control; `RUN"` an
-   exported `.dsk`. This is the payoff and the Tier-C-without-MAME check.
+5. ✅ **Minimal FDC 765** — `src/cpc/fdc.ts` (`Fdc` + `Disc`), decoded at
+   `&FA7E`/`&FB7E`/`&FB7F`. SPECIFY, RECALIBRATE, SEEK, SENSE INT/DRIVE, READ ID,
+   READ/WRITE DATA, FORMAT. Design + traced AMSDOS sequence: [`fdc.md`](fdc.md).
+   Verified end to end: `CAT` and `RUN"NAME"` an exported `.dsk` through the real
+   AMSDOS ROM.
+6. **Mount UI** — AMSDOS is already ROM 7; add a "mount disc" control (attach a
+   `.dsk`, e.g. the one just downloaded) so `RUN"` works from the playground.
 7. **Cassette via firmware** — `.cdt` `RUN"` through the firmware tape routines.
 
 ## Decisions to flag

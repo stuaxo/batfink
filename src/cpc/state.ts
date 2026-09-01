@@ -5,6 +5,7 @@
 import type { Z80 } from '../z80/cpu';
 import type { CPCMachine } from './machine';
 import { updateRomPaging } from './rom';
+import type { FdcState } from './fdc';
 
 export interface CpuState {
   r: number[];
@@ -50,6 +51,7 @@ export interface MachineState {
   interruptCounter: number;
   frames: number;
   frameReady: boolean;
+  fdc: FdcState;
 }
 
 /** A deep copy of everything needed to resume exactly where the machine is. */
@@ -85,6 +87,7 @@ export function getState(cpu: Z80, m: CPCMachine): MachineState {
     interruptCounter: m.interruptCounter,
     frames: m.frames,
     frameReady: m.frameReady,
+    fdc: m.fdc.getState(),
   };
 }
 
@@ -121,6 +124,7 @@ export function setState(cpu: Z80, m: CPCMachine, s: MachineState): void {
   m.interruptCounter = s.interruptCounter;
   m.frames = s.frames;
   m.frameReady = s.frameReady;
+  m.fdc.setState(s.fdc);
 
   // Re-derive the synth from the restored register file (its tone counters and
   // envelope phase resync within a frame). R13 skipped so the envelope is not

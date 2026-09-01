@@ -1,10 +1,16 @@
 # Minimal FDC 765 + disc
 
-PR 5 of [`rom.md`](rom.md). Enough µPD765A to let AMSDOS read (and write) an
-exported `.dsk` in-app. Not the full chip — no weak sectors, copy protection,
-or real timing.
+PR 5 of [`rom.md`](rom.md). ✅ **Built** — `src/cpc/fdc.ts` (`class Fdc` +
+`class Disc`), wired through `ports.ts` / `machine.ts` / `state.ts`. Enough
+µPD765A for AMSDOS to read and write an exported `.dsk`. Not the full chip — no
+weak sectors, copy protection, or real timing.
 
-This doc is the research so the PR is mechanical. Sources at the end.
+End to end: mount a `.dsk` built by `makeDsk`, and `CAT` lists the file and
+`RUN"NAME"` loads and runs a binary off it — the real AMSDOS ROM driving the
+real FDC (`test/integration/emulator/fdc-amsdos.itest.ts`). That is the
+Tier-C disc check without MAME.
+
+The rest of this doc is the research the build was based on. Sources at the end.
 
 ## What AMSDOS actually does
 

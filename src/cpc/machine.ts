@@ -8,6 +8,7 @@ import { LINES_PER_FRAME, PENS_PER_LINE, CRTC_DEFAULTS } from './constants';
 import { makeBus } from './ports';
 import { renderFrame } from './video';
 import { type RomSet, emptyRomSet, updateRomPaging } from './rom';
+import { Fdc } from './fdc';
 
 /** Hardware colour 20 in CPC_PALETTE is black; the machine powers up all-black. */
 const BLACK = 20;
@@ -36,6 +37,8 @@ export interface CPCMachine {
   romLow: Uint8Array | null;
   /** ROM currently visible at &C000-&FFFF, or null for RAM. */
   romHigh: Uint8Array | null;
+  /** Floppy controller (DDI-1). Idle and inert until a disc program pokes it. */
+  fdc: Fdc;
   ppiA: number;
   ppiB: number;
   ppiC: number;
@@ -97,6 +100,7 @@ export function makeCPC(): CPCMachine {
     roms: emptyRomSet(),
     romLow: null,
     romHigh: null,
+    fdc: new Fdc(),
   } as CPCMachine;
 
   m.bus = makeBus(m);
@@ -113,6 +117,7 @@ export function makeCPC(): CPCMachine {
     m.gaConfig = 0x8d; m.ramConfig = 0; m.romSelect = 0;
     m.ppiA = 0; m.ppiB = 0; m.ppiC = 0; m.ppiControl = 0x82;
     m.psgSelect = 0; m.psg.fill(0);
+    m.fdc.reset();
     updateRomPaging(m);
     m.pens.fill(BLACK);
     m.linePens.fill(BLACK);

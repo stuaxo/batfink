@@ -1,8 +1,8 @@
 // Z80 I/O space decode for the CPC 464: Gate Array (ink/mode), CRTC 6845
-// (register select + write), the ROM-select latch, and the PPI 8255 that the
-// keyboard and VSYNC flag hang off. The address decode is partial, matching the
-// real machine: a device responds whenever its bits are clear, so several can
-// react to one OUT.
+// (register select + write), the ROM-select latch, the PPI 8255 that the
+// keyboard and VSYNC flag hang off, and the DDI-1 floppy controller. The
+// address decode is partial, matching the real machine: a device responds
+// whenever its bits are clear, so several can react to one OUT.
 import type { Bus } from '../z80/bus';
 import type { CPCMachine } from './machine';
 import { psgStrobe } from './psg';
@@ -45,10 +45,18 @@ export function makeBus(m: CPCMachine): Bus {
         else if (fn === 1) m.ppiB = v;
         else if (fn === 2) { m.ppiC = v; m.kbdLine = v & 0x0f; psgStrobe(m); }
         else if (v & 0x80) m.ppiControl = v;
+      } else if ((port & 0x0480) === 0) {
+        // Floppy interface (A10=0, A7=0). A8: 0 = motor latch, 1 = FDC.
+        if (port & 0x0100) { if (port & 1) m.fdc.writeData(v); }
+        else m.fdc.setMotor((v & 1) === 1);
       }
     },
 
     in: (port) => {
+      if ((port & 0x0480) === 0 && (port & 0x0100)) {
+        // FDC: A0 picks the data register (1) or the main status register (0).
+        return (port & 1) ? m.fdc.readData() : m.fdc.readMsr();
+      }
       if ((port & 0x0800) === 0) {
         const fn = (port >> 8) & 3;
         if (fn === 0) return m.keys[m.kbdLine] ?? 0xff; // port A: key matrix

@@ -28,7 +28,8 @@ firmware boots).
 - Renderer: canvas 2D, palette snapshotted per scanline.
 - Sound: AY-3-8912, synthesised and buffered to Web Audio (Phase 3).
 - Firmware: a Machine switch boots the real 464 ROMs to a BASIC `Ready` prompt
-  (Phase 3). Disc is still to come.
+  (Phase 3). A minimal 765 FDC lets AMSDOS `CAT` / `RUN"` an exported `.dsk`;
+  a mount-disc UI is the last step.
 - Deployed to GitHub Pages and Cloudflare Workers.
 
 ### Verification
@@ -40,9 +41,10 @@ every SingleStepTests opcode passes on registers, memory and documented flags.
 Remaining gaps are undocumented `YF`/`XF` bits on SCF/CCF, `BIT n,(HL)`,
 `CPI`/`CPD` and `LDIR` — they need a MEMPTR/Q model and are baselined.
 
-`.dsk` and `.cdt` are built to spec and structurally tested but not yet
-round-tripped through a real emulator (the Tier C MAME check is designed, not
-built). Firmware ROMs (Phase 3) would let us test them in-app instead.
+`.dsk` now round-trips in-app: `test/integration/emulator/fdc-amsdos.itest.ts`
+mounts one built by `makeDsk` and the real AMSDOS ROM `CAT`s and `RUN"`s it.
+`.cdt` is still only structurally tested — the firmware tape path (PR 7) is the
+equivalent check. The Tier C MAME cross-check stays designed, not built.
 
 ## The seams
 
@@ -93,10 +95,11 @@ selection-total on the gutter; live *editing* in the memory-as-graphics view.
   Web Audio via an AudioWorklet. Register writes are sample-accurate. See
   [`plan/sound.md`](plan/sound.md). Firmware `SOUND` works once the ROMs are on.
 - **Firmware ROMs + disc** — boot to a `Ready` prompt, run BASIC, mount an
-  exported `.dsk` and `RUN"` it in-app. ROM paging is in, the **Machine** switch
-  boots the 464 firmware to `Ready`, and BASIC 1.0 checks out — PRINT, RUN, INK,
-  SOUND, CALL ([`plan/rom-boot-findings.md`](plan/rom-boot-findings.md)).
-  Remaining: the FDC + AMSDOS for disc. Plan: [`plan/rom.md`](plan/rom.md).
+  exported `.dsk` and `RUN"` it in-app. Done bar the mount UI: the **Machine**
+  switch boots the 464 firmware, BASIC 1.0 checks out (PRINT, RUN, INK, SOUND,
+  CALL), and a minimal 765 FDC ([`plan/fdc.md`](plan/fdc.md)) lets AMSDOS `CAT`
+  and `RUN"` an exported `.dsk`. Plans: [`plan/rom.md`](plan/rom.md),
+  [`plan/rom-boot-findings.md`](plan/rom-boot-findings.md).
 - **Per-microsecond palette changes** for mid-line colour splits. Needs a finer
   renderer than the per-scanline snapshot.
 - **Fuller CRTC** — R0–R9 effects, split screens, overscan.

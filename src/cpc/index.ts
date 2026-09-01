@@ -3,6 +3,8 @@
 export { makeCPC } from './machine';
 export type { CPCMachine } from './machine';
 export { makeBus } from './ports';
+export { emptyRomSet, updateRomPaging } from './rom';
+export type { RomSet } from './rom';
 export { renderFrame } from './video';
 export { runFrame, runUntil } from './frame';
 export type { RunCondition, StopReason } from './frame';

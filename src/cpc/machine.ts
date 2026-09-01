@@ -7,6 +7,7 @@ import { keyByName } from './keyboard';
 import { LINES_PER_FRAME, PENS_PER_LINE, CRTC_DEFAULTS } from './constants';
 import { makeBus } from './ports';
 import { renderFrame } from './video';
+import { type RomSet, emptyRomSet, updateRomPaging } from './rom';
 
 /** Hardware colour 20 in CPC_PALETTE is black; the machine powers up all-black. */
 const BLACK = 20;
@@ -28,6 +29,13 @@ export interface CPCMachine {
   gaConfig: number;
   ramConfig: number;
   romSelect: number;
+  /** ROM images. Fixed hardware, not machine state; empty until a ROM PR. */
+  roms: RomSet;
+  /** ROM currently visible at &0000-&3FFF, or null for RAM. Derived from
+   *  gaConfig/romSelect by updateRomPaging; never snapshotted. */
+  romLow: Uint8Array | null;
+  /** ROM currently visible at &C000-&FFFF, or null for RAM. */
+  romHigh: Uint8Array | null;
   ppiA: number;
   ppiB: number;
   ppiC: number;
@@ -86,6 +94,9 @@ export function makeCPC(): CPCMachine {
     onWrite: null,
     psgWrite: null,
     audio: null,
+    roms: emptyRomSet(),
+    romLow: null,
+    romHigh: null,
   } as CPCMachine;
 
   m.bus = makeBus(m);
@@ -102,6 +113,7 @@ export function makeCPC(): CPCMachine {
     m.gaConfig = 0x8d; m.ramConfig = 0; m.romSelect = 0;
     m.ppiA = 0; m.ppiB = 0; m.ppiC = 0; m.ppiControl = 0x82;
     m.psgSelect = 0; m.psg.fill(0);
+    updateRomPaging(m);
     m.pens.fill(BLACK);
     m.linePens.fill(BLACK);
     m.keys.fill(0xff);

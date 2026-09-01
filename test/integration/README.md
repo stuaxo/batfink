@@ -26,6 +26,7 @@ On a bare checkout, `npm run test:integration` passes with everything skipped.
 | `emulator/firmware-boot.itest.ts` | (ROMs are committed) | CPC 464 firmware boots to `Ready` and takes a keystroke |
 | `emulator/basic-shakedown.itest.ts` | (ROMs are committed) | BASIC 1.0: PRINT, program + RUN, INK/BORDER, SOUND, CALL |
 | `emulator/fdc-trace.itest.ts` | (ROMs are committed) | records the µPD765 command sequence AMSDOS issues for `CAT` (feeds `plan/fdc.md`) |
+| `emulator/fdc-amsdos.itest.ts` | (ROMs are committed) | real FDC + AMSDOS: `CAT` and `RUN"` a `.dsk` built by `makeDsk` |
 
 ## Tools
 

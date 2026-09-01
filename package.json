@@ -12,6 +12,11 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:integration": "vitest run -c vitest.integration.config.ts",
+    "test:conformance": "vitest run -c vitest.integration.config.ts conformance",
+    "test:differential": "vitest run -c vitest.integration.config.ts differential",
+    "typecheck:integration": "tsc -p test/integration/tsconfig.json --noEmit",
+    "fetch:fixtures": "node scripts/fetch-fixtures.mjs",
     "deploy": "npm run build && wrangler deploy"
   },
   "devDependencies": {

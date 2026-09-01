@@ -52,6 +52,8 @@ export function encodeInstruction(e: Emitter, mn: string, ops: string[]): void {
     case 'CPDR': return emit(0xed, 0xb9);
     case 'INI': return emit(0xed, 0xa2);
     case 'INIR': return emit(0xed, 0xb2);
+    case 'IND': return emit(0xed, 0xaa);
+    case 'INDR': return emit(0xed, 0xba);
     case 'OUTI': return emit(0xed, 0xa3);
     case 'OTIR': return emit(0xed, 0xb3);
     case 'OUTD': return emit(0xed, 0xab);
@@ -74,7 +76,7 @@ export function encodeInstruction(e: Emitter, mn: string, ops: string[]): void {
 
     case 'PUSH': case 'POP': {
       const base = M === 'PUSH' ? 0xc5 : 0xc1;
-      if (U0 === 'IX' || U0 === 'IY') return emit(pre(U0), base);
+      if (U0 === 'IX' || U0 === 'IY') return emit(pre(U0), M === 'PUSH' ? 0xe5 : 0xe1);
       if (U0 in RP2) return emit(base | (RP2[U0] << 4));
       throw new Error('bad operand for ' + M);
     }

@@ -22,10 +22,16 @@ Phase 1 is done. The rest of this document is the roadmap from here.
 - Renderer: canvas 2D, palette snapshotted per scanline.
 - No sound. No firmware ROMs. Deployed as static assets on Cloudflare Workers.
 
-### Not yet verified on hardware
+### Verification
+
+An opt-in suite (`npm run test:integration`, see `test/integration/README.md`)
+checks the CPU core against the SingleStepTests and Cringle exercisers, and the
+assembler against rasm/pasmo. `zexdoc` passes 100%; a few undocumented-flag
+gaps are baselined.
 
 `.dsk` and `.cdt` are built to spec and structurally tested, but not yet
-round-tripped through a reference emulator. `.cdt` timings follow 2cdt.
+round-tripped through a real emulator. `.cdt` timings follow 2cdt. The Tier C
+MAME check that would close this is designed but not built.
 
 ## Phase 2 — better than a text box
 

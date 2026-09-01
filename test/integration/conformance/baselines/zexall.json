@@ -1,0 +1,9 @@
+{
+  "_comment": "zexall sub-tests known to fail on our core: undocumented XF/YF flag results that need MEMPTR/WZ modelling. zexdoc (which masks those bits) passes 100%. A failure outside this list fails the test.",
+  "knownFailing": [
+    "bit n,(<ix,iy>+1)",
+    "bit n,<b,c,d,e,h,l,(hl),a>",
+    "cpd<r>",
+    "cpi<r>"
+  ]
+}

@@ -37,4 +37,4 @@ fill:  ld a,l
        or a
        jr nz,fill
 
-stop:  jr stop
+spin:  jr spin

@@ -38,6 +38,13 @@ describe('assembler', () => {
     expect(bytesOf('  bit 7,(iy-1)')).toEqual([0xfd, 0xcb, 0xff, 0x7e]);
   });
 
+  it('encodes IND/INDR and the index push/pop', () => {
+    expect(bytesOf('  ind')).toEqual([0xed, 0xaa]);
+    expect(bytesOf('  indr')).toEqual([0xed, 0xba]);
+    expect(bytesOf('  push ix')).toEqual([0xdd, 0xe5]);
+    expect(bytesOf('  pop iy')).toEqual([0xfd, 0xe1]);
+  });
+
   it('emits strings and DS fills', () => {
     expect(bytesOf('  db "AB",0')).toEqual([0x41, 0x42, 0x00]);
     expect(bytesOf('  ds 3,&EE')).toEqual([0xee, 0xee, 0xee]);

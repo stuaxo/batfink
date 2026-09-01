@@ -23,7 +23,7 @@ fill:  ld a,l
        or a               ; stop when HL wraps past &FFFF
        jr nz,fill
 
-stop:  jr stop
+spin:  jr spin
 
 ; --- set pens 0-15 from pentab, then the border ---------------------
 setpens:

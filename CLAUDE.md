@@ -9,6 +9,8 @@ Amstrad CPC 464 emulator, Z80 assembler and browser playground. TypeScript, Vite
 - `npm run build` — type-check, then build to `dist/`
 - `npm run typecheck` — type-check only
 - `npm run deploy` — build and `wrangler deploy`
+- `npm run test:integration` — opt-in checks against real Z80 test suites and
+  assemblers; not part of `npm test`. See `test/integration/README.md`.
 
 Use Node 24 (`nvm use`).
 
@@ -22,6 +24,7 @@ Use Node 24 (`nvm use`).
 - `src/ui/` — DOM glue for the playground. The only code that touches the page. Includes the CodeMirror editor, share links, revisions, capture.
 - `src/demo/` — demo listing shown in the editor on load.
 - `test/` — mirrors `src/`. Tests run in Node; the DOM-free cores need no browser. UI tests use happy-dom.
+- `test/integration/` — opt-in suite with its own config and `tsconfig`; excluded from `npm test` and `tsc`. Fixtures are fetched, not committed.
 
 ## Conventions
 

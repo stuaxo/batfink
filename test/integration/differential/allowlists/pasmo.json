@@ -1,0 +1,5 @@
+{
+  "_comment": "Corpus lines pasmo rejects or encodes differently. pasmo is a stricter, ZX-leaning dialect; these are pasmo limitations, not our bugs. Lines it cannot parse are also auto-skipped at runtime.",
+  "skipContains": ["in f,(c)", "out (c),0"],
+  "knownDiffs": []
+}

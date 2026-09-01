@@ -60,6 +60,8 @@ export function startApp(opts: AppOptions = {}): void {
   const image = ctx.createImageData(WIDTH, HEIGHT);
   const rgba = image.data;
   let running = false;
+  // The machine is RUNNING, PAUSED, or REVIEWING (paused, showing a past frame).
+  const isLive = () => running && debug.state === 'running' && !timeline.reviewing;
   let codeSize = 0;
   let snapshot: Uint8Array | null = null;
   let lastBuild: AssembleResult | null = null;
@@ -118,28 +120,30 @@ export function startApp(opts: AppOptions = {}): void {
       const f = result.symbols['FONT'];
       drawWordmark(need<HTMLCanvasElement>('wordmark'), Array.from(machine.ram.slice(f, f + 472)));
     }
-    renderDebug();
-    updateTimeline();
   }
 
+  /** Reset the machine and load the assembled image. Ends running. */
   function loadFull(result: AssembleResult): void {
     machine.reset();
     machine.ram.fill(0);
     for (let a = result.start; a < result.end; a++) machine.ram[a] = result.bytes[a];
     cpu.reset();
     cpu.PC = 'START' in result.symbols ? result.symbols['START'] : result.start;
-    debug.state = 'running'; // breakpoints persist, history does not
-    timeline.clear();
+    timeline.clear();       // history does not survive a full load
+    debug.state = 'running'; // breakpoints do
+    running = true;
     loadedImage = result.bytes.slice();
     loadedStart = result.start;
     loadedEnd = result.end;
     snapshot = snapshotSNA(cpu, machine);
     afterBuild(result);
     status(`Assembled ${codeSize} bytes. Running.`);
+    syncControls();
   }
 
-  /** Write only the bytes that changed, leaving the machine running. */
+  /** Write only the bytes that changed. Keeps the current run state. */
   function hotPatch(result: AssembleResult): void {
+    if (timeline.reviewing) timeline.goLive(); // edits apply to the present
     let n = 0;
     const hi = Math.max(result.end, loadedEnd);
     for (let a = result.start; a < hi; a++) {
@@ -155,12 +159,14 @@ export function startApp(opts: AppOptions = {}): void {
     timeline.clear(); // snapshots hold the old code
     snapshot = snapshotSNA(cpu, machine);
     afterBuild(result);
-    status(n ? `Patched ${n} byte${n === 1 ? '' : 's'}. Running.` : 'No change.');
+    status(n ? `Patched ${n} byte${n === 1 ? '' : 's'}.` : 'No change.');
+    syncControls();
   }
 
+  /** Full assemble + load, as if Run were pressed. */
   function build(): boolean {
     const result = assembleOnly();
-    if (!result) return false;
+    if (!result) { pauseExec(); return false; }
     loadFull(result);
     return true;
   }
@@ -170,15 +176,16 @@ export function startApp(opts: AppOptions = {}): void {
     clearTimeout(rebuildTimer);
     rebuildTimer = window.setTimeout(() => {
       const result = assembleOnly();
-      if (!result) { setRunning(false); return; }
+      if (!result) { pauseExec(); return; }
       if (loadedImage && result.start === loadedStart) hotPatch(result);
-      else { loadFull(result); setRunning(true); }
+      else loadFull(result);
     }, REBUILD_MS);
   }
 
   function loadSource(source: string): void {
     editor.setValue(source);
-    if (build()) { setRunning(true); paint(); } else setRunning(false);
+    build();
+    paint();
   }
 
   function paint(): void {
@@ -201,7 +208,7 @@ export function startApp(opts: AppOptions = {}): void {
   let acc = 0;
   function tick(now: number): void {
     requestAnimationFrame(tick);
-    if (!running || debug.isPaused()) { last = now; return; }
+    if (!isLive()) { last = now; return; }
     if (!last) last = now;
     acc += now - last;
     last = now;
@@ -224,19 +231,40 @@ export function startApp(opts: AppOptions = {}): void {
     need('tl-resume').hidden = !timeline.reviewing;
   }
 
-  function setRunning(on: boolean): void {
-    running = on;
-    if (on) debug.state = 'running';
-    else debug.pause();
-    need('pause').textContent = on && !debug.isPaused() ? 'Pause' : 'Resume';
+  // --- execution control --------------------------------------------
+  // Every transition ends with syncControls().
+  function syncControls(): void {
+    need('pause').textContent = isLive() ? 'Pause' : 'Resume';
+    (need('dbg-step') as HTMLButtonElement).disabled = isLive();
+    (need('dbg-over') as HTMLButtonElement).disabled = isLive();
     renderDebug();
+    updateTimeline();
+  }
+
+  function pauseExec(): void {
+    running = false;
+    debug.state = 'paused';
+    paint();
+    syncControls();
+  }
+
+  function resumeExec(): void {
+    if (timeline.reviewing) timeline.goLive();
+    debug.resume();
+    running = true;
+    syncControls();
+  }
+
+  /** Step / step-over / run-to: leave review mode by branching history here. */
+  function stepExec(fn: () => void): void {
+    if (timeline.reviewing) timeline.resumeHere();
+    fn(); // sets debug -> paused and fires onStop, which calls syncControls
   }
 
   debug.onStop = () => {
     running = false;
-    need('pause').textContent = 'Resume';
     paint();
-    renderDebug();
+    syncControls();
   };
 
   const flagStr = (f: { s: boolean; z: boolean; h: boolean; pv: boolean; n: boolean; c: boolean }): string =>
@@ -287,7 +315,11 @@ export function startApp(opts: AppOptions = {}): void {
   need('dbg-addr').addEventListener('input', renderDebug);
   need('dbg-runto').addEventListener('click', () => {
     const a = parseAddr(need<HTMLInputElement>('dbg-addr').value);
-    if (a !== null) debug.runToCursor(a);
+    if (a === null) { status('Enter a hex address first.'); return; }
+    stepExec(() => {
+      debug.runToCursor(a);
+      status(cpu.PC === a ? `Stopped at ${hex4(a)}.` : `Did not reach ${hex4(a)}.`);
+    });
   });
 
   let seekQueued = false;
@@ -299,22 +331,16 @@ export function startApp(opts: AppOptions = {}): void {
       running = false;
       debug.state = 'paused';
       timeline.seek(Number(scrub.value));
-      need('pause').textContent = 'Resume';
       paint();
-      renderDebug();
-      updateTimeline();
+      syncControls();
     });
   });
-  need('tl-live').addEventListener('click', () => {
-    timeline.goLive();
-    setRunning(true);
-    paint();
-    updateTimeline();
-  });
+  need('tl-live').addEventListener('click', () => { resumeExec(); paint(); });
   need('tl-resume').addEventListener('click', () => {
     timeline.resumeHere();
-    setRunning(true);
-    updateTimeline();
+    running = true;
+    debug.state = 'running';
+    syncControls();
   });
 
   // --- download menu ------------------------------------------------
@@ -436,15 +462,13 @@ export function startApp(opts: AppOptions = {}): void {
   });
 
   // --- buttons ---------------------------------------------------
-  need('assemble').addEventListener('click', () => {
-    if (build()) { setRunning(true); paint(); } else setRunning(false);
-  });
-  need('pause').addEventListener('click', () => setRunning(debug.isPaused()));
-  need('reset').addEventListener('click', () => { build(); setRunning(true); paint(); });
+  need('assemble').addEventListener('click', () => { build(); paint(); });
+  need('pause').addEventListener('click', () => (isLive() ? pauseExec() : resumeExec()));
+  need('reset').addEventListener('click', () => { build(); paint(); });
   need('restore').addEventListener('click', () => loadSource(DEMO_SOURCE));
   need('dl-go').addEventListener('click', download);
-  need('dbg-step').addEventListener('click', () => debug.step());
-  need('dbg-over').addEventListener('click', () => debug.stepOver());
+  need('dbg-step').addEventListener('click', () => stepExec(() => debug.step()));
+  need('dbg-over').addEventListener('click', () => stepExec(() => debug.stepOver()));
 
   attachKeyboard({
     isEditing: () => editor.hasFocus(),
@@ -457,7 +481,5 @@ export function startApp(opts: AppOptions = {}): void {
 
   need('dl-header').parentElement!.hidden = true;
   build();
-  setRunning(true);
-  updateTimeline();
   requestAnimationFrame(tick);
 }

@@ -106,6 +106,33 @@ describe('playground wiring', () => {
     expect(document.getElementById('dbg-code')!.querySelectorAll('.dbg-line').length).toBeGreaterThan(0);
   });
 
+  it('Step / Resume / Pause cycle is coherent', () => {
+    boot();
+    const pause = document.getElementById('pause')!;
+    const step = document.getElementById('dbg-step') as HTMLButtonElement;
+    const panel = document.getElementById('dbg') as HTMLDivElement;
+
+    expect(pause.textContent).toBe('Pause');
+    expect(step.disabled).toBe(true); // can't step while running
+
+    step.dispatchEvent(new Event('click')); // -> paused
+    expect(pause.textContent).toBe('Resume');
+    expect(step.disabled).toBe(false);
+    const pc1 = document.getElementById('dbg-regs')!.textContent;
+
+    step.dispatchEvent(new Event('click')); // step again
+    expect(document.getElementById('dbg-regs')!.textContent).not.toBe(pc1);
+
+    pause.dispatchEvent(new Event('click')); // Resume -> running
+    expect(pause.textContent).toBe('Pause');
+    expect(panel.hidden).toBe(true);
+    expect(step.disabled).toBe(true);
+
+    pause.dispatchEvent(new Event('click')); // Pause -> paused
+    expect(pause.textContent).toBe('Resume');
+    expect(panel.hidden).toBe(false);
+  });
+
   it('hot-patches a code edit instead of rebuilding', () => {
     vi.useFakeTimers();
     try {
@@ -115,7 +142,9 @@ describe('playground wiring', () => {
       src.value = src.value.replace('&8D', '&8C');
       src.dispatchEvent(new Event('input'));
       vi.advanceTimersByTime(400);
-      expect(document.getElementById('status')!.textContent).toMatch(/Patched \d+ byte/);
+      const s = document.getElementById('status')!.textContent ?? '';
+      expect(s).toMatch(/Patched \d+ byte/);
+      expect(s).not.toMatch(/Running/); // patching doesn't change run state
     } finally {
       vi.useRealTimers();
     }

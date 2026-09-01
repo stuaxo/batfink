@@ -40,6 +40,14 @@
           </label>
         </div>
 
+        <div class="disc" id="disc" hidden>
+          <span class="disc-label">Disc</span>
+          <button id="disc-mount-prog" type="button">Mount program</button>
+          <label class="filebtn">Mount .dsk&hellip;<input type="file" id="disc-file" accept=".dsk,.DSK" hidden></label>
+          <button id="disc-eject" type="button">Eject</button>
+          <span id="disc-status">no disc</span>
+        </div>
+
         <div class="timeline">
           <button id="tl-live" title="Jump to the latest frame">Live</button>
           <input type="range" id="tl-scrub" min="0" max="0" value="0" aria-label="Timeline">
@@ -152,6 +160,12 @@
       <code>Ready</code> prompt instead. Your assembled code is loaded at its <code>org</code>
       address, so you can <code>CALL</code> it from BASIC. Downloads and the debugger work the same
       in both modes.
+    </p>
+    <p>
+      In firmware mode a <b>Disc</b> row appears. <b>Mount program</b> puts the current listing on a
+      virtual disc in drive A &mdash; then <code>RUN&quot;NAME</code>. <b>Mount .dsk&hellip;</b> loads
+      a disc image from your computer (AMSDOS is emulated, so <code>CAT</code> and <code>RUN&quot;</code>
+      work as on a real machine).
     </p>
     <dl>
       <dt>&amp;7F00</dt><dd>Gate Array. Picks an ink, sets its colour, and selects the screen mode.</dd>

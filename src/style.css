@@ -75,6 +75,16 @@
     letter-spacing: .04em; color: var(--legend-dim); }
   .machine-pick select { font: inherit; font-size: 13px; padding: 6px 8px;
     border: 0; border-radius: 5px; background: #d8d6c8; color: #12140f; }
+  .disc { display: flex; flex-wrap: wrap; align-items: center; gap: 10px;
+    margin-top: 10px; font-size: 12px; letter-spacing: .04em; }
+  .disc .disc-label { color: var(--legend-dim); }
+  .disc #disc-status { color: var(--cpc-yellow);
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
+  .filebtn { font: inherit; font-size: 14px; font-weight: 600; color: #12140f;
+    background: linear-gradient(180deg, #d8d6c8, #b9b7a8); border-radius: 5px;
+    padding: 9px 16px; cursor: pointer;
+    box-shadow: 0 3px 0 #7d7c70, 0 5px 10px rgba(0,0,0,.35); }
+  .filebtn:active { transform: translateY(3px); box-shadow: 0 0 0 #7d7c70, 0 2px 6px rgba(0,0,0,.35); }
   #pause { min-width: 6.5em; }
   #rec { min-width: 5.5em; }
   #sound { min-width: 6em; }

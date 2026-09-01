@@ -10,6 +10,7 @@ export { getState, setState } from './state';
 export type { MachineState, CpuState } from './state';
 export { snapshotSNA } from './sna';
 export { Ay } from './ay';
+export { AudioSink } from './audio';
 export { CPC_PALETTE } from './palette';
 export type { Rgb } from './palette';
 export { PIXEL_TABLES } from './pixels';

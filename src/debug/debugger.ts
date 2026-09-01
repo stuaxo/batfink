@@ -42,7 +42,7 @@ export class Debugger {
   runFrames(frames: number): void {
     if (this.state === 'paused') return;
     for (let i = 0; i < frames; i++) {
-      const reason = runUntil(this.cpu, this.m, this.traced({ frame: true, breakpoints: this.breakpoints }));
+      const reason = runUntil(this.cpu, this.m, this.traced({ frame: true, breakpoints: this.breakpoints, audio: true }));
       if (reason === 'frame') this.m.frames++;
       if (reason === 'breakpoint') { this.pause(); return; }
     }

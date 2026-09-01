@@ -93,22 +93,20 @@ R13 → shape + restart).
 
 ## PRs
 
-1. **PSG register path** — `src/cpc/psg.ts` decodes BC1/BDIR on port C writes,
-   applies the masks, restarts the envelope on R13. Wire into `ports.ts`. Small;
-   fixes `.sna` export; prerequisite. `getState`/`setState` already cover `psg`.
-   Tests: the write dance populates `m.psg`; SNA reflects it.
-2. **AY synth core** — `src/cpc/ay.ts`, the ayumi port, pure. Tests: register
-   configs → measured output frequency (zero-crossings), envelope produces a
-   ramp, volume table monotonic, silence when all channels off.
-3. **Step the AY with the machine** — `m.audio: { ay, ring, sampleRate } | null`
-   (null = silent, like `m.onWrite`). In the advance loop, `audioClock += dt`;
-   while `audioClock >= tstatesPerSample` emit `ay.process()` into the ring. The
-   `psg.ts` decode also calls `m.audio?.ay.writeReg(reg, val)`.
-4. **Web Audio output** — `src/ui/sound.ts`: an AudioWorklet ring processor fed
-   by `postMessage`; `context.resume()` on the first user gesture; mute + volume
-   in the UI. The app tick posts each frame's samples after running frames.
-5. **Polish** — volume slider; give `capture.ts` a `MediaStreamAudioDestinationNode`
-   track so WebM recordings have sound.
+All done (#20–#24).
+
+1. ✅ **PSG register path** — `src/cpc/psg.ts`, wired into `ports.ts`. `.sna`
+   export now carries real PSG state.
+2. ✅ **AY synth core** — `src/cpc/ay.ts`, the ayumi port. `NOTICE` for the MIT
+   attribution.
+3. ✅ **Step the AY with the machine** — `src/cpc/audio.ts` (`AudioSink`), fed
+   per instruction on the live run path only (`cond.audio`). `setState`
+   re-derives the synth from the register file.
+4. ✅ **Web Audio output** — `src/ui/pcm-worklet.js` (ring buffer, silence on
+   underrun) + `src/ui/sound.ts` (Blob-URL worklet load, resume on gesture).
+   "Sound off/on" button + volume slider.
+5. ✅ **Polish** — the `sound` gallery example (interrupt-driven arpeggio with a
+   hardware envelope); WebM recordings pick up an audio track when sound is on.
 
 ## Decisions to flag
 

@@ -24,8 +24,8 @@ function parseZex(output: string) {
 describe.skipIf(!announce('conformance/prelim', havePrelim(), 'run `npm run fetch:fixtures`'))(
   'prelim',
   () => {
-    it('passes the preliminary exerciser', () => {
-      const r = runCpmProgram(load('prelim.com'), { maxMs: 60_000 });
+    it('passes the preliminary exerciser', async () => {
+      const r = await runCpmProgram(load('prelim.com'), { maxMs: 60_000 });
       expect(r.output).toContain('Preliminary tests complete');
       expect(r.output).not.toMatch(/ERROR/);
       expect(r.stopped).toBe('warm-boot');
@@ -40,8 +40,8 @@ describe.skipIf(
     haveZexdoc() ? 'set ZEX=1 to run (~5-12 min)' : 'run `npm run fetch:fixtures`',
   ),
 )('zexdoc', () => {
-  it('passes every documented-flag CRC', () => {
-    const r = runCpmProgram(load('zexdoc.com'), { maxMs: 20 * 60_000 });
+  it('passes every documented-flag CRC', async () => {
+    const r = await runCpmProgram(load('zexdoc.com'), { maxMs: 20 * 60_000 });
     const { fail, complete } = parseZex(r.output);
     expect(complete, r.output.slice(-2000)).toBe(true);
     expect(fail).toEqual([]);
@@ -61,7 +61,7 @@ describe.skipIf(
     ) as { knownFailing: string[] };
     const known = new Set(baseline.knownFailing);
 
-    const r = runCpmProgram(load('zexall.com'), { maxMs: 40 * 60_000 });
+    const r = await runCpmProgram(load('zexall.com'), { maxMs: 40 * 60_000 });
     const { pass, fail, complete } = parseZex(r.output);
     expect(complete, r.output.slice(-2000)).toBe(true);
 

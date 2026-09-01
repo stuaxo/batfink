@@ -9,10 +9,12 @@ export interface CpmRun {
   stopped: 'warm-boot' | 'step-limit' | 'timeout';
 }
 
-export function runCpmProgram(
+// Async so a multi-minute run (zexdoc/zexall) yields to the event loop and
+// vitest's worker heartbeat does not time out.
+export async function runCpmProgram(
   com: Uint8Array,
   opts: { maxSteps?: number; maxMs?: number } = {},
-): CpmRun {
+): Promise<CpmRun> {
   const maxSteps = opts.maxSteps ?? 6_000_000_000;
   const maxMs = opts.maxMs ?? 25 * 60_000;
 
@@ -64,7 +66,10 @@ export function runCpmProgram(
       continue;
     }
     cpu.step();
-    if ((steps & 0xfffff) === 0 && Date.now() - start > maxMs) { stopped = 'timeout'; break; }
+    if ((steps & 0x3fffff) === 0) {
+      if (Date.now() - start > maxMs) { stopped = 'timeout'; break; }
+      await new Promise<void>((r) => setImmediate(r));
+    }
   }
 
   return { output, steps, stopped };

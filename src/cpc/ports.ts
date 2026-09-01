@@ -5,6 +5,7 @@
 // react to one OUT.
 import type { Bus } from '../z80/bus';
 import type { CPCMachine } from './machine';
+import { psgStrobe } from './psg';
 
 export function makeBus(m: CPCMachine): Bus {
   return {
@@ -33,7 +34,7 @@ export function makeBus(m: CPCMachine): Bus {
         const fn = (port >> 8) & 3;
         if (fn === 0) m.ppiA = v;
         else if (fn === 1) m.ppiB = v;
-        else if (fn === 2) { m.ppiC = v; m.kbdLine = v & 0x0f; }
+        else if (fn === 2) { m.ppiC = v; m.kbdLine = v & 0x0f; psgStrobe(m); }
         else if (v & 0x80) m.ppiControl = v;
       }
     },

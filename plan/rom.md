@@ -12,11 +12,12 @@
 
 ## Where this got to
 
-The spike ([`rom-boot-findings.md`](rom-boot-findings.md)) settled the open
-question: the 464 firmware boots to `Ready` on the hardware model we already
-had, with only ROM paging added. BASIC checks out; a minimal FDC
-([`fdc.md`](fdc.md)) lets AMSDOS `CAT` and `RUN"` an exported `.dsk`. All that
-is left is a UI to mount a disc, plus cassette.
+Done (PRs 1–6). The spike ([`rom-boot-findings.md`](rom-boot-findings.md))
+settled the open question: the 464 firmware boots to `Ready` on the hardware
+model we already had, with only ROM paging added. BASIC checks out; a minimal
+FDC ([`fdc.md`](fdc.md)) plus a **Disc** mount control in firmware mode let
+AMSDOS `CAT` and `RUN"` a disc — either the current listing or a `.dsk` from the
+user's machine. Cassette (PR 7) is a separate effort and not scheduled.
 
 ## Which machine
 
@@ -135,9 +136,11 @@ Rough; re-plan after the spike.
    READ/WRITE DATA, FORMAT. Design + traced AMSDOS sequence: [`fdc.md`](fdc.md).
    Verified end to end: `CAT` and `RUN"NAME"` an exported `.dsk` through the real
    AMSDOS ROM.
-6. **Mount UI** — AMSDOS is already ROM 7; add a "mount disc" control (attach a
-   `.dsk`, e.g. the one just downloaded) so `RUN"` works from the playground.
+6. ✅ **Mount UI** — a **Disc** row in firmware mode: *Mount program* (the
+   current listing → a virtual disc in drive A) and *Mount .dsk…* (a file from
+   the user's machine), plus *Eject*. `src/ui/app.ts`, `#disc`.
 7. **Cassette via firmware** — `.cdt` `RUN"` through the firmware tape routines.
+   A separate effort; not scheduled.
 
 ## Decisions to flag
 

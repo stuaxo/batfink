@@ -2,7 +2,7 @@
 // lives in ../z80 and ../cpc; this file only touches the page.
 import { assemble, type AssembleResult } from '../asm';
 import { makeZ80 } from '../z80/cpu';
-import { makeCPC, snapshotSNA, AudioSink, CPC_PALETTE, WIDTH, HEIGHT } from '../cpc';
+import { makeCPC, snapshotSNA, AudioSink, CPC_PALETTE, WIDTH, HEIGHT, Disc } from '../cpc';
 import { installFirmware, removeFirmware } from '../cpc/roms';
 import { loadFirmwareRoms, type FirmwareRoms } from './firmware';
 import { Sound } from './sound';
@@ -473,14 +473,22 @@ export function startApp(opts: AppOptions = {}): void {
     return new Uint8Array(lastBuild.bytes.subarray(lastBuild.start, lastBuild.end));
   }
 
+  /** Name / load / entry for the current program, from the download fields. */
+  function programMeta(): { name: string; loadAddr: number; entryAddr: number } {
+    const name = (need<HTMLInputElement>('dl-name').value.trim() || 'DEMO').toUpperCase().slice(0, 8);
+    return {
+      name,
+      loadAddr: parseAddr(need<HTMLInputElement>('dl-load').value) ?? lastBuild?.start ?? 0,
+      entryAddr: parseAddr(need<HTMLInputElement>('dl-entry').value)
+        ?? (lastBuild ? entryOf(lastBuild) : 0),
+    };
+  }
+
   function download(): void {
     const code = assembledBytes();
     if (!code || !lastBuild) { status('Nothing assembled to download.'); return; }
-    const name = (need<HTMLInputElement>('dl-name').value.trim() || 'DEMO').toUpperCase().slice(0, 8);
-    const load = parseAddr(need<HTMLInputElement>('dl-load').value) ?? lastBuild.start;
-    const entry = parseAddr(need<HTMLInputElement>('dl-entry').value)
-      ?? ('START' in lastBuild.symbols ? lastBuild.symbols['START'] : lastBuild.start);
-    const meta = { filename: name + '.bin', loadAddr: load, entryAddr: entry };
+    const { name, loadAddr, entryAddr } = programMeta();
+    const meta = { filename: name + '.bin', loadAddr, entryAddr };
     const fmt = need<HTMLSelectElement>('dl-format').value;
     const note = need('dl-note');
     note.textContent = '';
@@ -631,8 +639,45 @@ export function startApp(opts: AppOptions = {}): void {
       machineSel.disabled = false;
     }
     firmware = want;
+    need('disc').hidden = !firmware;
     build();
     paint();
+  });
+
+  // --- disc drive --------------------------------------------------
+  function mountDisc(image: Uint8Array, label: string, runHint?: string): void {
+    let disc: Disc;
+    try {
+      disc = new Disc(image);
+    } catch {
+      status(`${label} is not a valid .dsk image.`);
+      return;
+    }
+    machine.fdc.drives[0] = disc;
+    need('disc-status').textContent = runHint ? `${label} — ${runHint}` : label;
+    status(`Mounted ${label}.`);
+  }
+
+  need('disc-mount-prog').addEventListener('click', () => {
+    const code = assembledBytes();
+    if (!code) { status('Assemble something first.'); return; }
+    const { name, loadAddr, entryAddr } = programMeta();
+    const image = makeDsk(code, { filename: name + '.bin', loadAddr, entryAddr });
+    mountDisc(image, `${name}.DSK`, `RUN"${name}`);
+  });
+
+  need<HTMLInputElement>('disc-file').addEventListener('change', async (e) => {
+    const input = e.target as HTMLInputElement;
+    const file = input.files?.[0];
+    input.value = '';
+    if (!file) return;
+    mountDisc(new Uint8Array(await file.arrayBuffer()), file.name);
+  });
+
+  need('disc-eject').addEventListener('click', () => {
+    machine.fdc.drives[0] = null;
+    need('disc-status').textContent = 'no disc';
+    status('Ejected the disc.');
   });
 
   need('assemble').addEventListener('click', () => { build(); paint(); });

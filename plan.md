@@ -11,8 +11,9 @@ step back, watch memory live.
 
 ## Where we are
 
-Phases 1 and 2 are done and deployed; Phase 3 is under way (sound shipped,
-firmware boots).
+Phases 1 and 2 are done and deployed. Phase 3 is nearly there: sound, the
+firmware ROMs, BASIC and disc all work; cassette and the finer-grained renderer
+are what's left.
 
 - Modular TypeScript, Vite, Vitest. DOM-free emulator, assembler, export and
   debug cores.
@@ -27,9 +28,9 @@ firmware boots).
 - Downloads: `.sna`, `.bin` (± AMSDOS header), `.dsk`, `.cdt`. PNG + WebM capture.
 - Renderer: canvas 2D, palette snapshotted per scanline.
 - Sound: AY-3-8912, synthesised and buffered to Web Audio (Phase 3).
-- Firmware: a Machine switch boots the real 464 ROMs to a BASIC `Ready` prompt
-  (Phase 3). A minimal 765 FDC lets AMSDOS `CAT` / `RUN"` an exported `.dsk`;
-  a mount-disc UI is the last step.
+- Firmware: a Machine switch boots the real 464 ROMs to a BASIC `Ready` prompt;
+  a minimal 765 FDC and a Disc mount control let AMSDOS `CAT` / `RUN"` a `.dsk`
+  in-app (Phase 3). Cassette is still to do.
 - Deployed to GitHub Pages and Cloudflare Workers.
 
 ### Verification
@@ -94,11 +95,12 @@ selection-total on the gutter; live *editing* in the memory-as-graphics view.
 - ✅ **Sound** — AY-3-8912 (ayumi port), synthesised in the emulator, buffered to
   Web Audio via an AudioWorklet. Register writes are sample-accurate. See
   [`plan/sound.md`](plan/sound.md). Firmware `SOUND` works once the ROMs are on.
-- **Firmware ROMs + disc** — boot to a `Ready` prompt, run BASIC, mount an
-  exported `.dsk` and `RUN"` it in-app. Done bar the mount UI: the **Machine**
-  switch boots the 464 firmware, BASIC 1.0 checks out (PRINT, RUN, INK, SOUND,
-  CALL), and a minimal 765 FDC ([`plan/fdc.md`](plan/fdc.md)) lets AMSDOS `CAT`
-  and `RUN"` an exported `.dsk`. Plans: [`plan/rom.md`](plan/rom.md),
+- ✅ **Firmware ROMs + disc** — the **Machine** switch boots the real 464 firmware
+  to a BASIC `Ready` prompt; BASIC checks out (PRINT, RUN, INK, SOUND, CALL); a
+  minimal 765 FDC ([`plan/fdc.md`](plan/fdc.md)) plus a **Disc** mount control
+  let AMSDOS `CAT` and `RUN"` a disc — the current listing or a `.dsk` from your
+  machine. Cassette `RUN"` (`.cdt` via the firmware tape routines) is left as a
+  separate job. Plans: [`plan/rom.md`](plan/rom.md),
   [`plan/rom-boot-findings.md`](plan/rom-boot-findings.md).
 - **Per-microsecond palette changes** for mid-line colour splits. Needs a finer
   renderer than the per-scanline snapshot.

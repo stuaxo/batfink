@@ -270,6 +270,42 @@ describe('playground wiring', () => {
     }
   });
 
+  it('the disc controls appear in firmware mode and mount the program', async () => {
+    const fs = await import('node:fs');
+    const romsDir = process.cwd() + '/src/cpc/roms/';
+    vi.stubGlobal('fetch', async (u: string) => ({
+      ok: true,
+      arrayBuffer: async () => new Uint8Array(
+        fs.readFileSync(romsDir + (u.includes('amsdos') ? 'amsdos.rom' : 'cpc464.rom')),
+      ).buffer,
+    }));
+    vi.stubGlobal('requestAnimationFrame', () => 0);
+    try {
+      boot();
+      const disc = document.getElementById('disc') as HTMLElement;
+      const discStatus = document.getElementById('disc-status')!;
+      expect(disc.hidden).toBe(true); // bare metal: no drive
+
+      const sel = document.getElementById('machine') as HTMLSelectElement;
+      sel.value = 'firmware';
+      sel.dispatchEvent(new Event('change'));
+      await vi.waitFor(() => expect(disc.hidden).toBe(false));
+
+      (document.getElementById('dl-name') as HTMLInputElement).value = 'GAME';
+      document.getElementById('disc-mount-prog')!.dispatchEvent(new Event('click'));
+      expect(discStatus.textContent).toBe('GAME.DSK — RUN"GAME');
+
+      document.getElementById('disc-eject')!.dispatchEvent(new Event('click'));
+      expect(discStatus.textContent).toBe('no disc');
+
+      sel.value = 'bare';
+      sel.dispatchEvent(new Event('change'));
+      expect(disc.hidden).toBe(true);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it('shows a RUN" hint when the disc format is chosen', () => {
     boot();
     const fmt = document.getElementById('dl-format') as HTMLSelectElement;

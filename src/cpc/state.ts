@@ -119,4 +119,9 @@ export function setState(cpu: Z80, m: CPCMachine, s: MachineState): void {
   m.interruptCounter = s.interruptCounter;
   m.frames = s.frames;
   m.frameReady = s.frameReady;
+
+  // Re-derive the synth from the restored register file (its tone counters and
+  // envelope phase resync within a frame). R13 skipped so the envelope is not
+  // retriggered on every seek.
+  if (m.audio) for (let r = 0; r <= 12; r++) m.audio.ay.writeReg(r, m.psg[r]);
 }

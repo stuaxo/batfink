@@ -2,6 +2,7 @@
 // This file owns the machine state and its lifecycle; the I/O decode lives in
 // ./ports and the pixel output in ./video.
 import type { Bus } from '../z80/bus';
+import type { AudioSink } from './audio';
 import { keyByName } from './keyboard';
 import { LINES_PER_FRAME, PENS_PER_LINE, CRTC_DEFAULTS } from './constants';
 import { makeBus } from './ports';
@@ -44,6 +45,8 @@ export interface CPCMachine {
   onWrite: ((addr: number, value: number) => void) | null;
   /** Optional hook, called after every PSG register write. Null when silent. */
   psgWrite: ((reg: number, value: number) => void) | null;
+  /** Sound output sink. Null when sound is off. */
+  audio: AudioSink | null;
   setKey(line: number, bit: number, down: boolean): void;
   keyByName(name: string): [number, number] | null;
   /** Reset everything except RAM to power-on state. */
@@ -82,6 +85,7 @@ export function makeCPC(): CPCMachine {
     frameReady: false,
     onWrite: null,
     psgWrite: null,
+    audio: null,
   } as CPCMachine;
 
   m.bus = makeBus(m);

@@ -318,7 +318,24 @@ export function startApp(opts: AppOptions = {}): void {
       lines.push(`${w((base + row * 16) & 0xffff)}  ${hexpart}  ${asc}`);
     }
     need('dbg-mem').textContent = lines.join('\n');
+
+    const traceOut = need('trace-out');
+    traceOut.hidden = !debug.trace.enabled;
+    if (debug.trace.enabled) {
+      const t = debug.traceLines(24).reverse(); // oldest first, like a log
+      traceOut.textContent = t.length
+        ? t.map((e) =>
+            `${w(e.pc)}  ${e.text.padEnd(16)}  A=${e.a.toString(16).padStart(2, '0')} ` +
+            `BC=${w(e.bc)} DE=${w(e.de)} HL=${w(e.hl)} SP=${w(e.sp)}`).join('\n')
+        : '(nothing recorded yet)';
+    }
   }
+
+  need('trace-on').addEventListener('change', (e) => {
+    debug.trace.enabled = (e.target as HTMLInputElement).checked;
+    if (!debug.trace.enabled) debug.trace.clear();
+    renderDebug();
+  });
 
   // --- memory-as-graphics view -------------------------------------
   const gfxCanvas = need<HTMLCanvasElement>('gfx-canvas');

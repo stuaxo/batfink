@@ -21,6 +21,7 @@ Use Node 24 (`nvm use`).
 - `src/asm/` — two-pass Z80 assembler. Public surface is `src/asm/index.ts`; `expr`, `operands`, `encode` are internal.
 - `src/export/` — file formats for the download menu: AMSDOS header, `.dsk`, `.cdt`. DOM-free.
 - `src/examples/` — starter listings for the gallery (`.asm` + an index).
+- `src/debug/` — debugger, time-travel, profiler, disasm timing, memory/screen views, trace. DOM-free; the UI drives it.
 - `src/ui/` — DOM glue for the playground. The only code that touches the page. Includes the CodeMirror editor, share links, revisions, capture.
 - `src/demo/` — demo listing shown in the editor on load.
 - `test/` — mirrors `src/`. Tests run in Node; the DOM-free cores need no browser. UI tests use happy-dom.

@@ -14,6 +14,8 @@ export interface RunCondition {
   breakpoints?: ReadonlySet<number>;
   /** Stop after this many instructions. */
   maxSteps?: number;
+  /** Called after each instruction with its start PC and (rounded) T-states. */
+  onStep?: (pc: number, tstates: number) => void;
 }
 
 const GUARD = 400_000;
@@ -49,6 +51,7 @@ function advance(cpu: Z80, m: CPCMachine, cycles: number): void {
  */
 export function runUntil(cpu: Z80, m: CPCMachine, cond: RunCondition): StopReason {
   const bp = cond.breakpoints;
+  const onStep = cond.onStep;
   const maxSteps = cond.maxSteps ?? Infinity;
   if (cond.frame) m.frameReady = false;
 
@@ -58,10 +61,13 @@ export function runUntil(cpu: Z80, m: CPCMachine, cond: RunCondition): StopReaso
     if (bp && bp.size && bp.has(cpu.PC)) return 'breakpoint';
     if (steps >= maxSteps) return 'steps';
 
+    const pc = cpu.PC;
     const before = cpu.tstates;
     cpu.step();
     steps++;
-    advance(cpu, m, cpu.tstates - before);
+    const dt = cpu.tstates - before;
+    if (onStep) onStep(pc, dt);
+    advance(cpu, m, dt);
 
     if (cond.frame && m.frameReady) return 'frame';
     if (++guard >= GUARD) return 'timeout';

@@ -150,6 +150,14 @@ describe('playground wiring', () => {
     }
   });
 
+  it('the frame-budget profiler produces a breakdown', () => {
+    boot();
+    document.getElementById('prof-measure')!.dispatchEvent(new Event('click'));
+    const out = document.getElementById('prof-out')!;
+    expect(out.querySelector('.prof-total')!.textContent).toMatch(/of 312 scanlines/);
+    expect(out.querySelectorAll('.prof-row').length).toBeGreaterThan(1);
+  });
+
   it('has a memory-as-graphics view that opens without error', () => {
     boot();
     const det = document.querySelector('details.gfxview') as HTMLDetailsElement;

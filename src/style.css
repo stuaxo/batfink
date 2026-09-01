@@ -207,6 +207,23 @@
   }
   #gfx-canvas { width: 100%; height: auto; image-rendering: pixelated; display: block; }
 
+  /* ---- frame budget ---- */
+  .profview { margin-top: 12px; border: 1px solid #24272c; border-radius: 6px; }
+  .profview summary {
+    list-style: none; cursor: pointer; padding: 8px 11px; font-size: 12.5px; font-weight: 600; color: var(--legend);
+  }
+  .profview summary::-webkit-details-marker { display: none; }
+  .profview[open] summary { border-bottom: 1px solid #24272c; }
+  .prof-body { padding: 12px; }
+  .prof-total { margin: 0 0 8px; font-size: 12px; color: var(--cpc-yellow);
+                font-family: ui-monospace, Menlo, Consolas, monospace; }
+  .prof-row { display: grid; grid-template-columns: 8em 1fr 7.5em; align-items: center; gap: 8px; margin-top: 3px;
+              font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 11.5px; }
+  .prof-name { color: var(--legend); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .prof-bar { background: #1d2024; border-radius: 3px; height: 12px; overflow: hidden; }
+  .prof-bar i { display: block; height: 100%; background: var(--cpc-sky); }
+  .prof-val { color: var(--legend-dim); text-align: right; }
+
   /* ---- notes ---- */
   .notes { margin-top: 40px; max-width: 74ch; }
   .notes h2 { font-size: 15px; letter-spacing: .04em; color: #e6e9ec; margin: 0 0 8px; }

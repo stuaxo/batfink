@@ -6,6 +6,7 @@ import mode2 from './mode2.asm?raw';
 import sprite from './sprite.asm?raw';
 import scroller from './scroller.asm?raw';
 import keyboard from './keyboard.asm?raw';
+import sound from './sound.asm?raw';
 import { DEMO_SOURCE } from '../demo';
 
 export interface Example {
@@ -21,5 +22,6 @@ export const EXAMPLES: readonly Example[] = [
   { id: 'sprite', title: 'Sprite — XOR block', source: sprite },
   { id: 'scroller', title: 'Scroller — hardware scroll', source: scroller },
   { id: 'keyboard', title: 'Keyboard — arrow keys', source: keyboard },
+  { id: 'sound', title: 'Sound — a tune on the AY', source: sound },
   { id: 'raster', title: 'Raster State of Mind — full demo', source: DEMO_SOURCE },
 ];

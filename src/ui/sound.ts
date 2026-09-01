@@ -8,6 +8,7 @@ import pcmWorkletSrc from './pcm-worklet.js?raw';
 export class Sound {
   private ctx: AudioContext | null = null;
   private node: AudioWorkletNode | null = null;
+  private dest: MediaStreamAudioDestinationNode | null = null;
   private volume = 0.7;
   private starting: Promise<void> | null = null;
 
@@ -55,6 +56,16 @@ export class Sound {
   /** Drop any buffered audio — on pause, so a fragment doesn't loop. */
   flush(): void {
     this.node?.port.postMessage({ flush: true });
+  }
+
+  /** A stream of the current output, for recording alongside the canvas. */
+  get stream(): MediaStream | null {
+    if (!this.node || !this.ctx) return null;
+    if (!this.dest) {
+      this.dest = this.ctx.createMediaStreamDestination();
+      this.node.connect(this.dest);
+    }
+    return this.dest.stream;
   }
 
   /** Interleaved stereo Float32; the buffer is transferred (zero-copy). */

@@ -592,7 +592,7 @@ export function startApp(opts: AppOptions = {}): void {
       status('Saved recording.');
       return;
     }
-    recorder = record(canvas);
+    recorder = record(canvas, soundOn ? sound.stream : null);
     if (!recorder) { status('Recording is not supported in this browser.'); return; }
     btn.textContent = 'Stop';
     status('Recording…');

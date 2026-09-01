@@ -10,12 +10,13 @@ export interface Recorder {
   stop(): Promise<Blob>;
 }
 
-/** Start recording `canvas`. Returns null if the browser has no MediaRecorder. */
-export function record(canvas: HTMLCanvasElement, fps = 50): Recorder | null {
+/** Start recording `canvas` (plus `audio`, if given). Null without MediaRecorder. */
+export function record(canvas: HTMLCanvasElement, audio?: MediaStream | null, fps = 50): Recorder | null {
   if (typeof MediaRecorder === 'undefined' || !canvas.captureStream) return null;
   const types = ['video/webm;codecs=vp9', 'video/webm;codecs=vp8', 'video/webm'];
   const mimeType = types.find((t) => MediaRecorder.isTypeSupported(t)) ?? '';
   const stream = canvas.captureStream(fps);
+  if (audio) for (const track of audio.getAudioTracks()) stream.addTrack(track);
   const rec = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
   const chunks: BlobPart[] = [];
   rec.ondataavailable = (e) => e.data.size && chunks.push(e.data);

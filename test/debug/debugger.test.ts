@@ -84,6 +84,23 @@ describe('Debugger', () => {
     expect(r.flags.z).toBe(false);
   });
 
+  it('runToCursor stops the machine at the requested address', () => {
+    const { dbg, cpu } = boot();
+    dbg.runToCursor(0x4005); // LD B,A
+    expect(dbg.isPaused()).toBe(true);
+    expect(cpu.PC).toBe(0x4005);
+  });
+
+  it('readMemory returns a wrapping copy', () => {
+    const { dbg, m } = boot();
+    m.ram[0x4000] = 0x11;
+    const mem = dbg.readMemory(0x4000, 4);
+    expect(mem[0]).toBe(0x11);
+    mem[0] = 0x99;
+    expect(m.ram[0x4000]).toBe(0x11); // copy, not a view
+    expect(dbg.readMemory(0xffff, 2).length).toBe(2); // wraps
+  });
+
   it('disassembleFrom decodes a run of instructions', () => {
     const { dbg } = boot();
     const rows = dbg.disassembleFrom(0x4000, 3);

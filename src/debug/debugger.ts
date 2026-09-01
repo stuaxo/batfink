@@ -107,6 +107,13 @@ export class Debugger {
     };
   }
 
+  /** A copy of `length` bytes from `addr`, wrapping at 64K. */
+  readMemory(addr: number, length: number): Uint8Array {
+    const out = new Uint8Array(length);
+    for (let i = 0; i < length; i++) out[i] = this.m.ram[(addr + i) & 0xffff];
+    return out;
+  }
+
   /** `count` decoded instructions starting at `from`. */
   disassembleFrom(from: number, count: number): Array<ReturnType<typeof decodeAt>> {
     const out = [];

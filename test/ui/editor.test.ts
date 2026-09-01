@@ -20,4 +20,15 @@ describe('CodeMirror editor', () => {
     expect(() => ed.setErrors([{ line: 1, message: 'boom' }])).not.toThrow();
     expect(() => ed.setSymbols(['START', 'LOOP'])).not.toThrow();
   });
+
+  it('shows T-state costs in a gutter', () => {
+    const parent = document.createElement('div');
+    document.body.appendChild(parent);
+    const ed = createEditor({ parent, doc: 'nop\nld a,1\n', onChange: () => {} });
+    ed.setTiming(new Map([[1, '4'], [2, '12/8']]));
+    const gutter = parent.querySelector('.cm-tstates');
+    expect(gutter).not.toBeNull();
+    expect(gutter!.textContent).toContain('4');
+    expect(gutter!.textContent).toContain('12/8');
+  });
 });

@@ -1,8 +1,8 @@
 // CodeMirror editor for the listing: Z80 highlighting, error underlines wired to
 // the assembler's line numbers, and completion for mnemonics and the program's
 // own labels.
-import { EditorState } from '@codemirror/state';
-import { EditorView, keymap, lineNumbers, highlightActiveLine } from '@codemirror/view';
+import { EditorState, StateField, StateEffect } from '@codemirror/state';
+import { EditorView, keymap, lineNumbers, highlightActiveLine, gutter, GutterMarker } from '@codemirror/view';
 import { history, historyKeymap, defaultKeymap, indentWithTab } from '@codemirror/commands';
 import { StreamLanguage, syntaxHighlighting, defaultHighlightStyle } from '@codemirror/language';
 import { z80 } from '@codemirror/legacy-modes/mode/z80';
@@ -19,9 +19,34 @@ export interface EditorHandle {
   setValue(source: string): void;
   setErrors(errors: BuildError[]): void;
   setSymbols(names: string[]): void;
+  /** line number -> T-state cost label ("12", "12/8"); shown in a gutter. */
+  setTiming(byLine: Map<number, string>): void;
   hasFocus(): boolean;
   focus(): void;
 }
+
+const setTimingEffect = StateEffect.define<Map<number, string>>();
+const timingField = StateField.define<Map<number, string>>({
+  create: () => new Map(),
+  update(value, tr) {
+    for (const e of tr.effects) if (e.is(setTimingEffect)) return e.value;
+    return value;
+  },
+});
+
+class CostMarker extends GutterMarker {
+  constructor(readonly text: string) { super(); }
+  override toDOM() { return document.createTextNode(this.text); }
+}
+
+const tstateGutter = gutter({
+  class: 'cm-tstates',
+  lineMarker(view, block) {
+    const cost = view.state.field(timingField).get(view.state.doc.lineAt(block.from).number);
+    return cost ? new CostMarker(cost) : null;
+  },
+  lineMarkerChange: (u) => u.transactions.some((tr) => tr.effects.some((e) => e.is(setTimingEffect))),
+});
 
 const MNEMONICS = (
   'adc add and bit call ccf cp cpd cpdr cpi cpir cpl daa dec di djnz ei ex exx ' +
@@ -38,6 +63,7 @@ const paper = EditorView.theme({
     padding: '4px 0',
   },
   '.cm-gutters': { backgroundColor: 'transparent', border: 'none', color: '#9a9784' },
+  '.cm-tstates': { minWidth: '2.2em', padding: '0 4px 0 2px', color: '#b8a54e', fontSize: '10.5px', textAlign: 'right' },
   '.cm-activeLine': { backgroundColor: 'rgba(0,0,0,.04)' },
   '.cm-activeLineGutter': { backgroundColor: 'transparent' },
   '&.cm-focused': { outline: '2px solid #0080ff', outlineOffset: '-2px' },
@@ -68,6 +94,8 @@ export function createEditor(opts: {
       doc: opts.doc,
       extensions: [
         lineNumbers(),
+        timingField,
+        tstateGutter,
         highlightActiveLine(),
         history(),
         keymap.of([...defaultKeymap, ...historyKeymap, indentWithTab]),
@@ -99,6 +127,9 @@ export function createEditor(opts: {
     },
     setSymbols(names) {
       symbols = names;
+    },
+    setTiming(byLine) {
+      view.dispatch({ effects: setTimingEffect.of(byLine) });
     },
     hasFocus: () => view.hasFocus,
     focus: () => view.focus(),

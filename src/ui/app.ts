@@ -7,6 +7,7 @@ import { Debugger } from '../debug/debugger';
 import { Timeline } from '../debug/timeline';
 import { renderGfx } from '../debug/memview';
 import { profileFrame } from '../debug/profiler';
+import { instructionCost, formatCost } from '../debug/timing';
 import { DEMO_SOURCE } from '../demo';
 import { EXAMPLES } from '../examples';
 import { withAmsdosHeader, makeDsk, makeCdt } from '../export';
@@ -122,6 +123,14 @@ export function startApp(opts: AppOptions = {}): void {
       const f = result.symbols['FONT'];
       drawWordmark(need<HTMLCanvasElement>('wordmark'), Array.from(machine.ram.slice(f, f + 472)));
     }
+
+    const directive = /^\s*(?:[A-Za-z_.@][\w.@]*\s*:)?\s*(?:db|dw|ds|defb|defw|defs|byte|word|org|equ|align|end)\b/i;
+    const timing = new Map<number, string>();
+    for (const row of result.listing) {
+      if (row.addr === null || row.bytes.length === 0 || directive.test(row.text)) continue;
+      timing.set(row.line, formatCost(instructionCost(row.bytes)));
+    }
+    editor.setTiming(timing);
   }
 
   /** Reset the machine and load the assembled image. Ends running. */

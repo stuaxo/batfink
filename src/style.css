@@ -108,14 +108,10 @@
   }
   .fanfold::before { left: 0; }
   .fanfold::after { right: 0; border-right: 0; border-left: 1px dashed rgba(0,0,0,.16); }
-  textarea#src {
-    display: block; width: 100%; height: 480px; resize: vertical;
-    padding: 0 30px; margin: 0; border: 0; background: transparent; color: var(--paper-ink);
-    font-family: ui-monospace, "SF Mono", Menlo, Consolas, "Courier New", monospace;
-    font-size: 12.5px; line-height: 24px; white-space: pre; overflow: auto;
-    tab-size: 8;
-  }
-  textarea#src:focus { outline: 2px solid var(--cpc-sky); outline-offset: -2px; }
+  #editor { position: relative; }
+  #editor .cm-editor { height: 480px; background: transparent; }
+  #editor .cm-scroller { padding: 0 28px; overflow: auto; }
+  #editor .cm-editor.cm-focused { outline: none; }
 
   .errors {
     margin-top: 12px; padding: 0; list-style: none;
@@ -123,6 +119,34 @@
   }
   .errors li { padding: 6px 10px; background: #2a1416; border-left: 3px solid var(--cpc-red); color: #ffc9c9; margin-bottom: 4px; }
   .ok { color: #9fd68c; font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 12.5px; margin-top: 12px; }
+
+  /* ---- tools ---- */
+  .tools { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin-top: 12px; }
+  .tools label { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--legend-dim); }
+  .tools select, .download select, .download input {
+    font: inherit; font-size: 12.5px; padding: 5px 7px; border-radius: 4px;
+    border: 1px solid #101215; background: #1d2024; color: var(--legend);
+  }
+  .tools button, .download summary {
+    font: inherit; font-size: 12.5px; font-weight: 600; padding: 6px 11px;
+    border-radius: 4px; border: 1px solid #34373c; background: #24272c; color: var(--legend);
+    cursor: pointer; box-shadow: none;
+  }
+  .tools button:active { transform: none; box-shadow: none; }
+
+  .download { margin-top: 14px; border: 1px solid #24272c; border-radius: 6px; }
+  .download summary { list-style: none; border: 0; border-radius: 6px; }
+  .download summary::-webkit-details-marker { display: none; }
+  .download[open] summary { border-bottom: 1px solid #24272c; border-radius: 6px 6px 0 0; }
+  .dl-body { display: grid; gap: 8px; padding: 12px; }
+  .dl-body label { display: grid; grid-template-columns: 120px 1fr; align-items: center;
+                   gap: 8px; font-size: 12px; color: var(--legend-dim); }
+  .dl-body .dl-check { grid-template-columns: auto 1fr; }
+  .dl-body input { width: 100%; }
+  .dl-body button { margin-top: 4px; }
+  .dl-note { margin: 4px 0 0; font-family: ui-monospace, Menlo, Consolas, monospace;
+             font-size: 12px; color: var(--cpc-yellow); }
+  .status { margin-top: 12px; min-height: 1.2em; font-size: 12.5px; color: #9fd68c; }
 
   /* ---- notes ---- */
   .notes { margin-top: 40px; max-width: 74ch; }

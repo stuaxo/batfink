@@ -3,10 +3,11 @@
 import type { CPCMachine } from '../cpc';
 
 /**
- * @param machine  the running machine
- * @param ignore   an element (the source editor) whose key events are left alone
+ * @param machine     the running machine
+ * @param isEditing   returns true while the listing editor has focus, so its
+ *                    keystrokes are left alone
  */
-export function attachKeyboard(machine: CPCMachine, ignore?: EventTarget): void {
+export function attachKeyboard(machine: CPCMachine, isEditing?: () => boolean): void {
   const held = new Set<string>();
   const release = (code: string) => {
     const k = machine.keyByName(code);
@@ -14,7 +15,7 @@ export function attachKeyboard(machine: CPCMachine, ignore?: EventTarget): void 
   };
 
   window.addEventListener('keydown', (e) => {
-    if (ignore && e.target === ignore) return;
+    if (isEditing?.()) return;
     const k = machine.keyByName(e.code);
     if (!k) return;
     machine.setKey(k[0], k[1], true);

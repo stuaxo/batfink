@@ -112,10 +112,12 @@ the FDC spike.
 
 Rough; re-plan after the spike.
 
-1. **ROM paging** — `bus.read` ROM-awareness, `m.romLow`/`m.romHigh`, the
-   `&7Fxx` bit 2/3 and `&DFxx` decode, power-on config. `getState`/`setState`
-   already cover `gaConfig`/`romSelect`; add ROM contents? No — ROMs are fixed,
-   not state. Tests: paging in/out, writes-through, read benchmark.
+1. ✅ **ROM paging** (`src/cpc/rom.ts`) — ROM-aware `bus.read`, `m.romLow`/
+   `m.romHigh` derived by `updateRomPaging` from the `&7Fxx` bit 2/3 and `&DFxx`
+   decode; `setState` re-derives them. ROM contents are fixed hardware, not
+   snapshotted. No images load yet, so behaviour is unchanged. Read hit measured
+   ~12% on the demo (43→38× realtime) — inside headroom. Power-on config stays
+   `&8D` (both off); the firmware-on default lands with PR 2's boot.
 2. **Load + boot spike** — bundle `cpc464.rom`, fetch at startup, boot with no
    disc, screenshot where it gets to. Deliverable is a **findings note**, not a
    feature.

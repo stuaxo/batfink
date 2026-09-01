@@ -6,10 +6,19 @@
 import type { Bus } from '../z80/bus';
 import type { CPCMachine } from './machine';
 import { psgStrobe } from './psg';
+import { updateRomPaging } from './rom';
 
 export function makeBus(m: CPCMachine): Bus {
   return {
-    read: (a) => m.ram[a],
+    // Hot path. With no ROM paged in (every current demo) both fields are null:
+    // two checks, then RAM. Writes always land in RAM — see `write`.
+    read: (a) => {
+      const lo = m.romLow;
+      if (lo && a < 0x4000) return lo[a];
+      const hi = m.romHigh;
+      if (hi && a >= 0xc000) return hi[a & 0x3fff];
+      return m.ram[a];
+    },
     // m.onWrite is null in run mode (one predictable branch); the debugger
     // installs it for watchpoints and dirty-region tracking.
     write: (a, v) => { m.ram[a] = v; if (m.onWrite) m.onWrite(a, v); },
@@ -19,7 +28,7 @@ export function makeBus(m: CPCMachine): Bus {
         switch (v & 0xc0) {
           case 0x00: m.penSelect = (v & 0x10) ? 16 : (v & 0x0f); break;
           case 0x40: m.pens[m.penSelect] = v & 0x1f; break;
-          case 0x80: m.mode = v & 0x03; m.gaConfig = v; break;
+          case 0x80: m.mode = v & 0x03; m.gaConfig = v; updateRomPaging(m); break;
           case 0xc0: m.ramConfig = v; break;
         }
       } else if ((port & 0x4000) === 0 && (port & 0x8000) === 0x8000) {
@@ -28,7 +37,7 @@ export function makeBus(m: CPCMachine): Bus {
         if (fn === 0) m.crtcSelect = v & 0x1f;
         else if (fn === 1) m.crtc[m.crtcSelect] = v;
       } else if ((port & 0x2000) === 0) {
-        m.romSelect = v; // 0xDFxx: upper ROM number
+        m.romSelect = v; updateRomPaging(m); // 0xDFxx: upper ROM number
       } else if ((port & 0x0800) === 0) {
         // 0xF4xx-0xF7xx: PPI 8255
         const fn = (port >> 8) & 3;

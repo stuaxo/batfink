@@ -4,6 +4,7 @@
 // emulators; this one is ours.
 import type { Z80 } from '../z80/cpu';
 import type { CPCMachine } from './machine';
+import { updateRomPaging } from './rom';
 
 export interface CpuState {
   r: number[];
@@ -112,6 +113,7 @@ export function setState(cpu: Z80, m: CPCMachine, s: MachineState): void {
   m.gaConfig = s.gaConfig;
   m.ramConfig = s.ramConfig;
   m.romSelect = s.romSelect;
+  updateRomPaging(m); // re-derive romLow/romHigh from the restored config
   m.ppiA = s.ppiA; m.ppiB = s.ppiB; m.ppiC = s.ppiC; m.ppiControl = s.ppiControl;
   m.psgSelect = s.psgSelect;
   m.frameCycles = s.frameCycles;

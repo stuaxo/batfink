@@ -68,6 +68,10 @@ export function makeZ80(bus: Bus): Z80 {
 
   function fetch() { const v = rd(cpu.PC); cpu.PC = (cpu.PC + 1) & 0xFFFF; return v; }
   function fetch16() { const l = fetch(); return l | (fetch() << 8); }
+  // R counts opcode fetches (M1 cycles): once per instruction, plus once more
+  // for each CB/ED/DD/FD prefix byte.
+  function incR() { cpu.Rr = (cpu.Rr & 0x80) | ((cpu.Rr + 1) & 0x7F); }
+  function decR() { cpu.Rr = (cpu.Rr & 0x80) | ((cpu.Rr - 1) & 0x7F); }
 
   function push(v: number) { cpu.SP = (cpu.SP - 1) & 0xFFFF; wr(cpu.SP, v >> 8); cpu.SP = (cpu.SP - 1) & 0xFFFF; wr(cpu.SP, v & 0xFF); }
   function pop() { const l = rd(cpu.SP); cpu.SP = (cpu.SP + 1) & 0xFFFF; const h = rd(cpu.SP); cpu.SP = (cpu.SP + 1) & 0xFFFF; return l | (h << 8); }
@@ -138,9 +142,11 @@ export function makeZ80(bus: Bus): Z80 {
   function sra(v: number) { const c = v & 1, r = ((v >> 1) | (v & 0x80)) & 0xFF; cpu.F = szp(r) | c; return r; }
   function sll(v: number) { const c = (v >> 7) & 1, r = ((v << 1) | 1) & 0xFF; cpu.F = szp(r) | c; return r; }
   function srl(v: number) { const c = v & 1, r = (v >> 1) & 0xFF; cpu.F = szp(r) | c; return r; }
-  function bit(v: number, b: number) {
+  // `yx` supplies the undocumented YF/XF bits: the operand itself for BIT n,r,
+  // but the address high byte for BIT n,(IX+d).
+  function bit(v: number, b: number, yx = v) {
     const r = v & (1 << b);
-    cpu.F = (cpu.F & CF) | HF | (r ? 0 : (ZF | PF)) | (r & SF) | (v & (YF | XF));
+    cpu.F = (cpu.F & CF) | HF | (r ? 0 : (ZF | PF)) | (r & SF) | (yx & (YF | XF));
   }
   const shifters: Array<(v: number) => number> = [rlc, rrc, rl, rr, sla, sra, sll, srl];
 
@@ -169,9 +175,19 @@ export function makeZ80(bus: Bus): Z80 {
     }
   };
 
+  // Flags for INI/IND/OUTI/OUTD (Patrik Rak's model). `value` is the byte
+  // transferred, `k` the 9-bit intermediate sum. B is already decremented.
+  function blockIoFlags(value: number, k: number) {
+    const b = R[0];
+    cpu.F = (b ? 0 : ZF) | (b & (SF | YF | XF))
+      | (value & 0x80 ? NF : 0)
+      | (k > 0xff ? (HF | CF) : 0)
+      | parity[(k & 7) ^ b];
+  }
+
   // --- CB prefix ---
   function execCB() {
-    const op = fetch(); cpu.tstates += 8;
+    const op = fetch(); incR(); cpu.tstates += 8;
     const y = (op >> 3) & 7, z = op & 7, x = op >> 6;
     if (z === 6) cpu.tstates += 7;
     const v = getR(z);
@@ -183,7 +199,7 @@ export function makeZ80(bus: Bus): Z80 {
 
   // --- ED prefix ---
   function execED() {
-    const op = fetch(); cpu.tstates += 8;
+    const op = fetch(); incR(); cpu.tstates += 8;
     switch (op) {
       case 0x40: case 0x48: case 0x50: case 0x58:
       case 0x60: case 0x68: case 0x70: case 0x78: { // IN r,(C)
@@ -221,8 +237,8 @@ export function makeZ80(bus: Bus): Z80 {
       case 0x5E: case 0x7E: cpu.IM = 2; break;
       case 0x47: cpu.I = R[7]; cpu.tstates += 1; break;
       case 0x4F: cpu.Rr = R[7]; cpu.tstates += 1; break;
-      case 0x57: R[7] = cpu.I; cpu.F = (cpu.F & CF) | (R[7] ? 0 : ZF) | (R[7] & SF) | (cpu.IFF2 ? PF : 0); cpu.tstates += 1; break;
-      case 0x5F: R[7] = cpu.Rr & 0xFF; cpu.F = (cpu.F & CF) | (R[7] ? 0 : ZF) | (R[7] & SF) | (cpu.IFF2 ? PF : 0); cpu.tstates += 1; break;
+      case 0x57: R[7] = cpu.I; cpu.F = (cpu.F & CF) | (R[7] ? 0 : ZF) | (R[7] & (SF | YF | XF)) | (cpu.IFF2 ? PF : 0); cpu.tstates += 1; break;
+      case 0x5F: R[7] = cpu.Rr & 0xFF; cpu.F = (cpu.F & CF) | (R[7] ? 0 : ZF) | (R[7] & (SF | YF | XF)) | (cpu.IFF2 ? PF : 0); cpu.tstates += 1; break;
       case 0x67: { // RRD
         const a = R[7], m = rd(getHL());
         wr(getHL(), ((m >> 4) | (a << 4)) & 0xFF); R[7] = (a & 0xF0) | (m & 0x0F);
@@ -255,20 +271,23 @@ export function makeZ80(bus: Bus): Z80 {
       }
       case 0xA3: case 0xAB: case 0xB3: case 0xBB: { // OUTI/OUTD/OTIR/OTDR
         const dir = (op & 8) ? -1 : 1;
+        const v = rd(getHL());
         R[0] = (R[0] - 1) & 0xFF;
-        const v = rd(getHL()); bus.out(getBC(), v);
+        bus.out(getBC(), v);
         setHL((getHL() + dir) & 0xFFFF);
-        cpu.F = NF | (R[0] ? 0 : ZF) | (R[0] & (SF | YF | XF));
+        blockIoFlags(v, (v + R[5]) & 0x1ff); // k = value + L (post-update)
         cpu.tstates += 8;
         if ((op & 0x10) && R[0]) { cpu.PC = (cpu.PC - 2) & 0xFFFF; cpu.tstates += 5; }
         break;
       }
       case 0xA2: case 0xAA: case 0xB2: case 0xBA: { // INI/IND/INIR/INDR
         const dir = (op & 8) ? -1 : 1;
-        const v = bus.in(getBC()); wr(getHL(), v);
+        const c0 = R[1];
+        const v = bus.in(getBC());
+        wr(getHL(), v);
         R[0] = (R[0] - 1) & 0xFF;
         setHL((getHL() + dir) & 0xFFFF);
-        cpu.F = NF | (R[0] ? 0 : ZF) | (R[0] & (SF | YF | XF));
+        blockIoFlags(v, (v + ((c0 + dir) & 0xff)) & 0x1ff); // k = value + (C ± 1)
         cpu.tstates += 8;
         if ((op & 0x10) && R[0]) { cpu.PC = (cpu.PC - 2) & 0xFFFF; cpu.tstates += 5; }
         break;
@@ -279,7 +298,7 @@ export function makeZ80(bus: Bus): Z80 {
 
   // --- DD/FD prefix (IX/IY) ---
   function execIdx(isIY: boolean) {
-    const op = fetch(); cpu.tstates += 4;
+    const op = fetch(); incR(); cpu.tstates += 4;
     const get = () => isIY ? cpu.IY : cpu.IX;
     const set = (v: number) => { if (isIY) cpu.IY = v & 0xFFFF; else cpu.IX = v & 0xFFFF; };
     const idxH = () => (get() >> 8) & 0xFF, idxL = () => get() & 0xFF;
@@ -317,7 +336,7 @@ export function makeZ80(bus: Bus): Z80 {
         const y = (sub >> 3) & 7, z = sub & 7, x = sub >> 6;
         let v = rd(a);
         if (x === 0) { v = shifters[y](v); wr(a, v); if (z !== 6) R[z] = v; }
-        else if (x === 1) { bit(v, y); }
+        else if (x === 1) { bit(v, y, a >> 8); }
         else if (x === 2) { v = v & ~(1 << y); wr(a, v); if (z !== 6) R[z] = v; }
         else { v = v | (1 << y); wr(a, v); if (z !== 6) R[z] = v; }
         cpu.tstates += 15; break;
@@ -338,7 +357,10 @@ export function makeZ80(bus: Bus): Z80 {
           else if (z === 5) { aluOp(y, idxL()); cpu.tstates += 4; }
           else { aluOp(y, R[z]); cpu.tstates += 4; }
         } else {
-          cpu.PC = (cpu.PC - 1) & 0xFFFF; // treat as plain opcode
+          // An ignored DD/FD prefix: re-run the byte as a plain opcode. step()
+          // will count its own M1 fetch, so undo the one incR above.
+          decR();
+          cpu.PC = (cpu.PC - 1) & 0xFFFF;
           step();
         }
       }
@@ -348,8 +370,7 @@ export function makeZ80(bus: Bus): Z80 {
   function step(): number {
     if (cpu.halted) { cpu.tstates += 4; return 4; }
     const t0 = cpu.tstates;
-    const op = fetch();
-    cpu.Rr = (cpu.Rr & 0x80) | ((cpu.Rr + 1) & 0x7F);
+    const op = fetch(); incR();
     const x = op >> 6, y = (op >> 3) & 7, z = op & 7, p = (op >> 4) & 3, q = (op >> 3) & 1;
 
     switch (x) {

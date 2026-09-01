@@ -571,7 +571,7 @@
   "cases": 200,
   "regPass": 200,
   "ramPass": 200,
-  "fExactPass": 53,
+  "fExactPass": 200,
   "fMaskPass": 200,
   "rPass": 200
  },
@@ -707,16 +707,16 @@
   "cases": 200,
   "regPass": 200,
   "ramPass": 200,
-  "fExactPass": 52,
+  "fExactPass": 200,
   "fMaskPass": 200,
   "rPass": 200
  },
  "ed 5f": {
   "cases": 200,
-  "regPass": 0,
+  "regPass": 200,
   "ramPass": 200,
-  "fExactPass": 50,
-  "fMaskPass": 198,
+  "fExactPass": 200,
+  "fMaskPass": 200,
   "rPass": 200
  },
  "ed 67": {
@@ -755,16 +755,16 @@
   "cases": 200,
   "regPass": 200,
   "ramPass": 200,
-  "fExactPass": 10,
-  "fMaskPass": 10,
+  "fExactPass": 200,
+  "fMaskPass": 200,
   "rPass": 200
  },
  "ed a3": {
   "cases": 200,
   "regPass": 200,
   "ramPass": 200,
-  "fExactPass": 19,
-  "fMaskPass": 19,
+  "fExactPass": 200,
+  "fMaskPass": 200,
   "rPass": 200
  },
  "ed b0": {
@@ -851,7 +851,7 @@
   "cases": 200,
   "regPass": 200,
   "ramPass": 200,
-  "fExactPass": 57,
+  "fExactPass": 200,
   "fMaskPass": 200,
   "rPass": 200
  },

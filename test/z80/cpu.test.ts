@@ -67,6 +67,37 @@ describe('Z80 core', () => {
     expect(cpu.tstates % 4).toBe(0);
   });
 
+  it('LD A,R counts both opcode fetches', () => {
+    const { ram, bus } = bareBus();
+    const cpu = makeZ80(bus);
+    ram.set([0xed, 0x5f], 0); // LD A,R
+    cpu.reset();
+    cpu.Rr = 0x10;
+    cpu.step();
+    expect(cpu.R[7]).toBe(0x12); // +1 for ED, +1 for 5F
+  });
+
+  it('INI derives H/C and P from the transferred byte', () => {
+    const { ram, bus, ports } = bareBus();
+    const cpu = makeZ80(bus);
+    ports.set(0x01ff, 0xff);
+    // LD BC,&01FF ; LD HL,&9000 ; INI
+    run(ram, cpu, [0x01, 0xff, 0x01, 0x21, 0x00, 0x90, 0xed, 0xa2]);
+    expect(ram[0x9000]).toBe(0xff);
+    expect(cpu.F & 0x02).toBeTruthy(); // NF: bit 7 of the input
+    // k = 0xff + ((0xff + 1) & 0xff) = 0xff -> no carry
+    expect(cpu.F & 0x11).toBe(0); // HF | CF clear
+  });
+
+  it('BIT n,(IX+d) takes YF/XF from the address high byte', () => {
+    const { ram, bus } = bareBus();
+    const cpu = makeZ80(bus);
+    // LD IX,&2000 ; BIT 0,(IX+&20)  -> address &2020, high byte &20
+    run(ram, cpu, [0xdd, 0x21, 0x00, 0x20, 0xdd, 0xcb, 0x20, 0x46]);
+    expect(cpu.F & 0x20).toBeTruthy(); // YF from (0x2020 >> 8) = 0x20
+    expect(cpu.F & 0x08).toBe(0); // XF clear
+  });
+
   it('interrupt in IM1 pushes PC and jumps to &0038', () => {
     const { ram, bus } = bareBus();
     const cpu = makeZ80(bus);

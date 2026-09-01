@@ -8,13 +8,17 @@ step back, watch memory live.
 
 ## Where we are
 
-Phase 1 is done and deployed.
+Phases 1 and 2 are done and deployed.
 
-- Modular TypeScript, Vite, Vitest. DOM-free emulator, assembler and export cores.
-- Assembler: labels, `ORG` `EQU` `DB` `DW` `DS` `ALIGN` `END`, full base set,
-  `CB`, `ED` (incl. `IND`/`INDR`), `IX`/`IY`. Bases `&FF` `#FF` `0xFF` `nnH` `%1010`.
-- CodeMirror editor: Z80 highlighting, error underlines, symbol completion.
-  Assembles and runs on idle.
+- Modular TypeScript, Vite, Vitest. DOM-free emulator, assembler, export and
+  debug cores.
+- Assembler: labels (indented too), `ORG` `EQU` `DB` `DW` `DS` `ALIGN` `END`,
+  full base set, `CB`, `ED` (incl. `IND`/`INDR`), `IX`/`IY`, disassembler.
+  Bases `&FF` `#FF` `0xFF` `nnH` `%1010`.
+- CodeMirror editor: Z80 highlighting, error underlines, symbol completion,
+  per-line T-state gutter. Assembles and hot-patches on idle.
+- Debugger, time-travel, frame-budget profiler, memory-as-graphics view,
+  screen-address helper, instruction trace (see Phase 2).
 - Share by URL hash. Named revisions in `localStorage`. Examples gallery.
 - Downloads: `.sna`, `.bin` (± AMSDOS header), `.dsk`, `.cdt`. PNG + WebM capture.
 - Renderer: canvas 2D, palette snapshotted per scanline.
@@ -53,24 +57,28 @@ when unused so the demo still runs at 50fps on a phone.
 
 ## Phase 2 — better than a text box
 
+Done.
+
 - ✅ **Debugger** (`src/debug/debugger.ts`) — breakpoints, step / step-over,
-  run-to-address, register + flag view, live disassembly, memory hex.
-- ✅ **Time-travel** (`src/debug/timeline.ts`) — snapshot ring + input log;
-  scrub back, `Live`, `Resume here`.
-- **Live memory views** — generalise `renderFrame` to
-  `(mem, cpuState, params) → pixels | text`; register several: CPC screen, hex,
-  tile/sprite grid at any address, font, PSG registers. Editing writes back
-  through `m.onWrite`.
-- **Hot-swap code** — reassemble, diff against the last `bytes`/`used`, patch
-  changed bytes at a frame boundary. No reset. Length changes pad/truncate
-  within the instruction's footprint or refuse.
-- **Frame-budget profiler** — attribute T-states per routine, show each as a bar
-  against the 312 scanlines. The most CPC-specific thing we can build.
-- **T-state counts in the editor gutter**, with a selection total. (disassembler
-  + the assembler listing we already have)
-- **Screen-address helper** — click a pixel, get the address and byte layout.
-- **Trace** — a ring buffer of the last N instructions (PC + register delta),
-  dumped on a breakpoint.
+  run-to-address, register + flag view, live disassembly, memory hex. Coherent
+  RUNNING / PAUSED / REVIEWING model.
+- ✅ **Time-travel** (`src/debug/timeline.ts`) — snapshot ring (~1 min) + input
+  log; scrub back, `Live`, `Resume here`.
+- ✅ **Hot-swap code** — the debounced assemble patches only changed bytes into
+  the running machine; full rebuild on Run / Reset / ORG change.
+- ✅ **Memory-as-graphics view** (`src/debug/memview.ts`) — any block as a CPC
+  bitmap, mode 0/1/2, linear or interleaved.
+- ✅ **Frame-budget profiler** (`src/debug/profiler.ts`) — per-routine T-states
+  as scanlines against the 312 available.
+- ✅ **T-state gutter** (`src/debug/timing.ts`) — per-instruction cost, `12/8`
+  for the conditional ones.
+- ✅ **Screen-address helper** (`src/debug/screen.ts`) — hover the screen for the
+  byte address and pixel layout.
+- ✅ **Instruction trace** (`src/debug/trace.ts`) — opt-in ring of the last 1024
+  instructions.
+
+Follow-ups if wanted: roll the profiler up to top-level routines; a
+selection-total on the gutter; live *editing* in the memory-as-graphics view.
 
 ## Phase 3 — fidelity
 

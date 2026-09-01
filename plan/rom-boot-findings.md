@@ -46,6 +46,18 @@ After boot the OS sits in a ~29-instruction loop at `&1A3C–&1D2B` in the lower
 ROM, polling KM workspace at `&B4DE`/`&B4E0` (the key-buffer pointers) with
 interrupts on. This is the editor waiting for a line — the normal `Ready` state.
 
+## BASIC shakedown (PR 4)
+
+Driving BASIC 1.0 through the key matrix
+(`test/integration/emulator/basic-shakedown.itest.ts`), everything a playground
+user reaches works with no firmware fixes:
+
+- `PRINT "text"` and `PRINT 2+2`
+- entering `10`/`20` line-numbered statements and `RUN`, including a `GOTO` loop
+- `INK` and `BORDER` (the palette changes)
+- `SOUND` (the firmware programs the PSG — tone period, channel volume, mixer)
+- `CALL &8000` into machine code poked into RAM — the playground's own workflow
+
 ## Consequence for the plan
 
 `rom.md` budgeted PR 3 ("firmware hardware gaps") at "days to weeks" and treated
@@ -57,11 +69,10 @@ Revised order:
 1. ✅ ROM paging (PR 1)
 2. ✅ This spike (PR 2)
 3. ✅ **UI "Machine" switch** — *bare* vs *firmware (464)* (`src/ui/firmware.ts`).
-4. **BASIC shakedown** — type and `RUN` a real program, `PRINT`, firmware
-   `SOUND`, `INK`, `LOCATE`. Fix whatever the firmware trips on. Likely small.
-5. **Minimal FDC 765** + `.dsk` sector reader (unchanged, PR 5).
-6. **AMSDOS + mount** — `RUN"` an exported `.dsk` (unchanged, PR 6).
-7. **Cassette via firmware** (unchanged, PR 7).
+4. ✅ **BASIC shakedown** — PRINT, program entry + RUN, INK/BORDER, SOUND, CALL.
+5. **Minimal FDC 765** + `.dsk` sector reader — the next real work.
+6. **AMSDOS + mount** — `RUN"` an exported `.dsk`.
+7. **Cassette via firmware** — `.cdt` `RUN"` through the tape routines.
 
 PR 3-as-written (a phase of hardware-gap grinding) collapses into step 4's
 shakedown.

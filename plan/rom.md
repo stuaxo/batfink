@@ -126,8 +126,10 @@ Rough; re-plan after the spike.
    vs *firmware (464)*. Fetches the ROM assets (`?url` + `fetch`, cached),
    `installFirmware`, boots from &0000; the assembled listing loads at its `org`
    for `CALL` from BASIC. Debugger/time-travel/downloads unchanged.
-4. **BASIC shakedown** — enter and `RUN` a program; `PRINT`, `INK`, `LOCATE`,
-   firmware `SOUND`. Fix whatever the firmware trips on (expected small).
+4. ✅ **BASIC shakedown** (`test/integration/emulator/basic-shakedown.itest.ts`)
+   — `PRINT` + expressions, entering and `RUN`ning a program with a `GOTO` loop,
+   `INK`/`BORDER`, firmware `SOUND`, and `CALL`ing poked machine code all work.
+   Nothing to fix.
 5. **Minimal FDC 765** — `src/cpc/fdc.ts` + a `.dsk` sector reader. Tests
    against a `.dsk` we build ourselves: Read ID, Seek, Read Data return the
    right bytes.

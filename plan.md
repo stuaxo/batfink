@@ -91,12 +91,12 @@ selection-total on the gutter; live *editing* in the memory-as-graphics view.
 
 - ✅ **Sound** — AY-3-8912 (ayumi port), synthesised in the emulator, buffered to
   Web Audio via an AudioWorklet. Register writes are sample-accurate. See
-  [`plan/sound.md`](plan/sound.md). Firmware `SOUND` still needs the ROMs.
+  [`plan/sound.md`](plan/sound.md). Firmware `SOUND` works once the ROMs are on.
 - **Firmware ROMs + disc** — boot to a `Ready` prompt, run BASIC, mount an
-  exported `.dsk` and `RUN"` it in-app. ROM paging is in, and the **Machine**
-  switch boots the 464 firmware to `Ready` with keyboard input
-  ([`plan/rom-boot-findings.md`](plan/rom-boot-findings.md)). Remaining: a BASIC
-  shakedown, then the FDC + AMSDOS for disc. Plan: [`plan/rom.md`](plan/rom.md).
+  exported `.dsk` and `RUN"` it in-app. ROM paging is in, the **Machine** switch
+  boots the 464 firmware to `Ready`, and BASIC 1.0 checks out — PRINT, RUN, INK,
+  SOUND, CALL ([`plan/rom-boot-findings.md`](plan/rom-boot-findings.md)).
+  Remaining: the FDC + AMSDOS for disc. Plan: [`plan/rom.md`](plan/rom.md).
 - **Per-microsecond palette changes** for mid-line colour splits. Needs a finer
   renderer than the per-scanline snapshot.
 - **Fuller CRTC** — R0–R9 effects, split screens, overscan.

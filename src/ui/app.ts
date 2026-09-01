@@ -6,6 +6,7 @@ import { makeCPC, snapshotSNA, CPC_PALETTE, WIDTH, HEIGHT } from '../cpc';
 import { Debugger } from '../debug/debugger';
 import { Timeline } from '../debug/timeline';
 import { renderGfx } from '../debug/memview';
+import { profileFrame } from '../debug/profiler';
 import { DEMO_SOURCE } from '../demo';
 import { EXAMPLES } from '../examples';
 import { withAmsdosHeader, makeDsk, makeCdt } from '../export';
@@ -333,6 +334,27 @@ export function startApp(opts: AppOptions = {}): void {
     need(id).addEventListener('input', renderGfxView);
   }
   gfxDetails.addEventListener('toggle', renderGfxView);
+
+  // --- frame-budget profiler --------------------------------------
+  need('prof-measure').addEventListener('click', () => {
+    if (!lastBuild || lastBuild.errors.length) { status('Assemble something first.'); return; }
+    const p = profileFrame(cpu, machine, lastBuild.symbols);
+    const out = need('prof-out');
+    const used = p.total / 256;
+    const rows = p.routines.slice(0, 16);
+    const top = rows[0]?.tstates || 1;
+    out.innerHTML =
+      `<p class="prof-total">${used.toFixed(1)} of 312 scanlines &nbsp;·&nbsp; ${p.total} T-states</p>` +
+      rows.map((r) => {
+        const pct = Math.round(r.fraction * 100);
+        const w = Math.max(2, Math.round((r.tstates / top) * 100));
+        return `<div class="prof-row">` +
+          `<span class="prof-name">${r.name}</span>` +
+          `<span class="prof-bar"><i style="width:${w}%"></i></span>` +
+          `<span class="prof-val">${r.scanlines.toFixed(1)} ln &nbsp; ${pct}%</span>` +
+          `</div>`;
+      }).join('');
+  });
 
   need('dbg-code').addEventListener('click', (e) => {
     const line = (e.target as HTMLElement).closest<HTMLElement>('.dbg-line');

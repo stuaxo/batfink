@@ -150,6 +150,17 @@ describe('playground wiring', () => {
     }
   });
 
+  it('has a memory-as-graphics view that opens without error', () => {
+    boot();
+    const det = document.querySelector('details.gfxview') as HTMLDetailsElement;
+    expect(det).not.toBeNull();
+    expect(document.getElementById('gfx-mode')).not.toBeNull();
+    det.open = true;
+    expect(() => det.dispatchEvent(new Event('toggle'))).not.toThrow();
+    (document.getElementById('gfx-addr') as HTMLInputElement).value = '&C000';
+    expect(() => document.getElementById('gfx-addr')!.dispatchEvent(new Event('input'))).not.toThrow();
+  });
+
   it('wires the timeline controls without error', () => {
     boot();
     expect(document.getElementById('tl-scrub')).not.toBeNull();

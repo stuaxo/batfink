@@ -5,6 +5,7 @@ import { makeZ80 } from '../z80/cpu';
 import { makeCPC, snapshotSNA, CPC_PALETTE, WIDTH, HEIGHT } from '../cpc';
 import { Debugger } from '../debug/debugger';
 import { Timeline } from '../debug/timeline';
+import { renderGfx } from '../debug/memview';
 import { DEMO_SOURCE } from '../demo';
 import { EXAMPLES } from '../examples';
 import { withAmsdosHeader, makeDsk, makeCdt } from '../export';
@@ -220,6 +221,7 @@ export function startApp(opts: AppOptions = {}): void {
       timeline.record();
       paint();
       updateTimeline();
+      if ((machine.frames & 3) === 0) renderGfxView();
     }
   }
 
@@ -239,6 +241,7 @@ export function startApp(opts: AppOptions = {}): void {
     (need('dbg-over') as HTMLButtonElement).disabled = isLive();
     renderDebug();
     updateTimeline();
+    renderGfxView();
   }
 
   function pauseExec(): void {
@@ -305,6 +308,31 @@ export function startApp(opts: AppOptions = {}): void {
     }
     need('dbg-mem').textContent = lines.join('\n');
   }
+
+  // --- memory-as-graphics view -------------------------------------
+  const gfxCanvas = need<HTMLCanvasElement>('gfx-canvas');
+  const gfxCtx = gfxCanvas.getContext('2d');
+  const gfxDetails = gfxCanvas.closest('details') as HTMLDetailsElement;
+
+  function renderGfxView(): void {
+    if (!gfxCtx || !gfxDetails.open) return;
+    const addr = parseAddr(need<HTMLInputElement>('gfx-addr').value) ?? 0;
+    const mode = Number(need<HTMLSelectElement>('gfx-mode').value) as 0 | 1 | 2;
+    const widthBytes = Math.max(1, Math.min(128, Number(need<HTMLInputElement>('gfx-w').value) || 1));
+    const rows = Math.max(1, Math.min(272, Number(need<HTMLInputElement>('gfx-h').value) || 1));
+    const layout = need<HTMLSelectElement>('gfx-layout').value === 'screen' ? 'screen' : 'linear';
+    const img = renderGfx((a) => machine.ram[a], machine.pens, { addr, mode, widthBytes, rows, layout });
+    gfxCanvas.width = img.width;
+    gfxCanvas.height = img.height;
+    const data = gfxCtx.createImageData(img.width, img.height);
+    data.data.set(img.rgba);
+    gfxCtx.putImageData(data, 0, 0);
+  }
+
+  for (const id of ['gfx-addr', 'gfx-mode', 'gfx-w', 'gfx-h', 'gfx-layout']) {
+    need(id).addEventListener('input', renderGfxView);
+  }
+  gfxDetails.addEventListener('toggle', renderGfxView);
 
   need('dbg-code').addEventListener('click', (e) => {
     const line = (e.target as HTMLElement).closest<HTMLElement>('.dbg-line');

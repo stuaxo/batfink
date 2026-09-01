@@ -70,12 +70,12 @@ Revised order:
 2. ✅ This spike (PR 2)
 3. ✅ **UI "Machine" switch** — *bare* vs *firmware (464)* (`src/ui/firmware.ts`).
 4. ✅ **BASIC shakedown** — PRINT, program entry + RUN, INK/BORDER, SOUND, CALL.
-5. **Minimal FDC 765** + `.dsk` sector reader — the next real work.
-6. **AMSDOS + mount** — `RUN"` an exported `.dsk`.
-7. **Cassette via firmware** — `.cdt` `RUN"` through the tape routines.
+5. ✅ **Minimal FDC 765** + `.dsk` reader ([`fdc.md`](fdc.md)).
+6. ✅ **Disc mount UI** — `RUN"` an exported `.dsk` or one from disk.
+7. **Cassette via firmware** — not scheduled ([`cassette.md`](cassette.md)).
 
-PR 3-as-written (a phase of hardware-gap grinding) collapses into step 4's
-shakedown.
+PR 3-as-written (a phase of hardware-gap grinding) collapsed into step 4's
+shakedown — it found nothing to fix.
 
 ## Repro
 

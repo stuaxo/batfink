@@ -17,7 +17,8 @@ settled the open question: the 464 firmware boots to `Ready` on the hardware
 model we already had, with only ROM paging added. BASIC checks out; a minimal
 FDC ([`fdc.md`](fdc.md)) plus a **Disc** mount control in firmware mode let
 AMSDOS `CAT` and `RUN"` a disc — either the current listing or a `.dsk` from the
-user's machine. Cassette (PR 7) is a separate effort and not scheduled.
+user's machine. Cassette is a separate effort and not scheduled —
+[`cassette.md`](cassette.md).
 
 ## Which machine
 
@@ -140,19 +141,21 @@ Rough; re-plan after the spike.
    current listing → a virtual disc in drive A) and *Mount .dsk…* (a file from
    the user's machine), plus *Eject*. `src/ui/app.ts`, `#disc`.
 7. **Cassette via firmware** — `.cdt` `RUN"` through the firmware tape routines.
-   A separate effort; not scheduled.
+   Not scheduled; design sketch in [`cassette.md`](cassette.md).
 
-## Decisions to flag
+## Decisions taken
 
-- ✅ **Commit the ROMs** — done, in `src/cpc/roms/`. Redistribution-permitted,
+- ✅ **Commit the ROMs** — in `src/cpc/roms/`. Redistribution-permitted,
   universal emulator practice.
-- **Minimal FDC vs AMSDOS trap** — decide after PR 5's spike.
-- **Standalone-HTML** loses ROMs unless we add a base64 build variant — defer.
-- ✅ **Scope creep risk** — the spike retired it: the firmware boots on the
-  model we already have.
+- ✅ **Faithful FDC, not an AMSDOS trap** — the µPD765A state machine drives the
+  real ROM; no ROM patching. Fallback wasn't needed.
+- ✅ **Scope creep risk** — the spike retired it: the firmware boots on the model
+  we already have.
+- **Standalone-HTML** still loses the ROMs (they load by `fetch`); a base64
+  build variant is deferred until someone wants single-file firmware sharing.
 
-## Effort
+## What's left
 
-PR 1 ~1 day (done). PR 2 spike ~½ day (done — and cheaper than feared). PR 3
-(UI switch) ~1 day. PR 4 (BASIC shakedown) ~1–3 days. PR 5 (FDC) ~2–3 days.
-PR 6–7 build on PR 5.
+Only cassette ([`cassette.md`](cassette.md)) — not scheduled. Everything through
+PR 6 shipped in roughly the estimated time (PR 2 and PR 4 came in well under —
+the firmware needed no hardware fixes).

@@ -106,6 +106,21 @@ describe('playground wiring', () => {
     expect(document.getElementById('dbg-code')!.querySelectorAll('.dbg-line').length).toBeGreaterThan(0);
   });
 
+  it('hot-patches a code edit instead of rebuilding', () => {
+    vi.useFakeTimers();
+    try {
+      boot();
+      const src = document.getElementById('src') as HTMLTextAreaElement;
+      expect(src.value).toContain('&8D');
+      src.value = src.value.replace('&8D', '&8C');
+      src.dispatchEvent(new Event('input'));
+      vi.advanceTimersByTime(400);
+      expect(document.getElementById('status')!.textContent).toMatch(/Patched \d+ byte/);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('wires the timeline controls without error', () => {
     boot();
     expect(document.getElementById('tl-scrub')).not.toBeNull();

@@ -63,6 +63,9 @@ export function startApp(opts: AppOptions = {}): void {
   let codeSize = 0;
   let snapshot: Uint8Array | null = null;
   let lastBuild: AssembleResult | null = null;
+  let loadedImage: Uint8Array | null = null; // the code image last written to RAM
+  let loadedStart = 0;
+  let loadedEnd = 0;
 
   const initialSource = sourceFromHash(location.hash) ?? DEMO_SOURCE;
   const editor = makeEditor({
@@ -90,7 +93,8 @@ export function startApp(opts: AppOptions = {}): void {
     }
   }
 
-  function build(): boolean {
+  /** Assemble and report; returns the result only if it is clean. */
+  function assembleOnly(): AssembleResult | null {
     const result = assemble(editor.getValue());
     lastBuild = result;
     editor.setErrors(result.errors);
@@ -98,27 +102,66 @@ export function startApp(opts: AppOptions = {}): void {
       codeSize = 0;
       showErrors(result.errors);
       status(`${result.errors.length} error${result.errors.length > 1 ? 's' : ''}.`);
-      return false;
+      return null;
     }
     editor.setSymbols(Object.keys(result.symbols));
+    return result;
+  }
+
+  function afterBuild(result: AssembleResult): void {
     codeSize = result.end - result.start;
+    need('r-size').textContent = `${codeSize} bytes`;
+    need<HTMLInputElement>('dl-load').placeholder = hex4(result.start);
+    need<HTMLInputElement>('dl-entry').placeholder = hex4(cpu.PC);
+    showErrors([]);
+    if ('FONT' in result.symbols) {
+      const f = result.symbols['FONT'];
+      drawWordmark(need<HTMLCanvasElement>('wordmark'), Array.from(machine.ram.slice(f, f + 472)));
+    }
+    renderDebug();
+    updateTimeline();
+  }
+
+  function loadFull(result: AssembleResult): void {
     machine.reset();
     machine.ram.fill(0);
     for (let a = result.start; a < result.end; a++) machine.ram[a] = result.bytes[a];
     cpu.reset();
     cpu.PC = 'START' in result.symbols ? result.symbols['START'] : result.start;
-    debug.state = 'running'; // a fresh build starts running; breakpoints persist
+    debug.state = 'running'; // breakpoints persist, history does not
     timeline.clear();
+    loadedImage = result.bytes.slice();
+    loadedStart = result.start;
+    loadedEnd = result.end;
     snapshot = snapshotSNA(cpu, machine);
-    need('r-size').textContent = `${codeSize} bytes`;
-    need<HTMLInputElement>('dl-load').placeholder = hex4(result.start);
-    need<HTMLInputElement>('dl-entry').placeholder = hex4(cpu.PC);
-    showErrors([]);
+    afterBuild(result);
     status(`Assembled ${codeSize} bytes. Running.`);
-    if ('FONT' in result.symbols) {
-      const f = result.symbols['FONT'];
-      drawWordmark(need<HTMLCanvasElement>('wordmark'), Array.from(machine.ram.slice(f, f + 472)));
+  }
+
+  /** Write only the bytes that changed, leaving the machine running. */
+  function hotPatch(result: AssembleResult): void {
+    let n = 0;
+    const hi = Math.max(result.end, loadedEnd);
+    for (let a = result.start; a < hi; a++) {
+      const want = a < result.end ? result.bytes[a] : 0;
+      if (want !== loadedImage![a]) {
+        machine.ram[a] = want;
+        loadedImage![a] = want;
+        n++;
+      }
     }
+    loadedStart = result.start;
+    loadedEnd = result.end;
+    timeline.clear(); // snapshots hold the old code
+    snapshot = snapshotSNA(cpu, machine);
+    afterBuild(result);
+    status(n ? `Patched ${n} byte${n === 1 ? '' : 's'}. Running.` : 'No change.');
+  }
+
+  function build(): boolean {
+    const result = assembleOnly();
+    if (!result) return false;
+    loadFull(result);
     return true;
   }
 
@@ -126,8 +169,10 @@ export function startApp(opts: AppOptions = {}): void {
   function scheduleBuild(): void {
     clearTimeout(rebuildTimer);
     rebuildTimer = window.setTimeout(() => {
-      if (build()) setRunning(true);
-      else setRunning(false);
+      const result = assembleOnly();
+      if (!result) { setRunning(false); return; }
+      if (loadedImage && result.start === loadedStart) hotPatch(result);
+      else { loadFull(result); setRunning(true); }
     }, REBUILD_MS);
   }
 

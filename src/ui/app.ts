@@ -1,13 +1,21 @@
 // Wires the DOM playground to the emulator core. Everything hardware-related
 // lives in ../z80 and ../cpc; this file only touches the page.
-import { assemble, type AssembleError } from '../asm';
+import { assemble, type AssembleResult } from '../asm';
 import { makeZ80 } from '../z80/cpu';
 import { makeCPC, runFrame, snapshotSNA, CPC_PALETTE, WIDTH, HEIGHT } from '../cpc';
 import { DEMO_SOURCE } from '../demo';
+import { EXAMPLES } from '../examples';
+import { withAmsdosHeader, makeDsk, makeCdt } from '../export';
 import { drawWordmark } from './wordmark';
 import { attachKeyboard } from './keyboard';
+import { createEditor, type EditorFactory } from './editor';
+import { sourceFromHash, hashForSource } from './share';
+import { listRevisions, saveRevision, getRevision, deleteRevision } from './revisions';
+import { downloadBytes, downloadBlob } from './download';
+import { screenshot, record, type Recorder } from './capture';
 
 const FRAME_MS = 19.968; // 1000 / 50.08Hz
+const REBUILD_MS = 300;
 
 function need<T extends HTMLElement>(id: string): T {
   const el = document.getElementById(id);
@@ -15,16 +23,33 @@ function need<T extends HTMLElement>(id: string): T {
   return el as T;
 }
 
-export function startApp(): void {
-  const srcBox = need<HTMLTextAreaElement>('src');
+function parseAddr(text: string): number | null {
+  const s = text.trim();
+  if (!s) return null;
+  const m = /^(?:&|#|0x|\$)?([0-9a-f]+)$/i.exec(s);
+  if (m && /[&#$]|0x/i.test(s)) return parseInt(m[1], 16) & 0xffff;
+  if (/^\d+$/.test(s)) return parseInt(s, 10) & 0xffff;
+  if (/^[0-9a-f]+$/i.test(s)) return parseInt(s, 16) & 0xffff;
+  return null;
+}
+
+const hex4 = (n: number) => '&' + n.toString(16).toUpperCase().padStart(4, '0');
+
+export interface AppOptions {
+  createEditor?: EditorFactory;
+}
+
+export function startApp(opts: AppOptions = {}): void {
+  const makeEditor = opts.createEditor ?? createEditor;
+
   const canvas = need<HTMLCanvasElement>('screen');
   const maybeCtx = canvas.getContext('2d');
   if (!maybeCtx) throw new Error('no 2d context');
   const ctx = maybeCtx;
   const errBox = need<HTMLUListElement>('errors');
   const okBox = need<HTMLParagraphElement>('ok');
+  const statusBox = need<HTMLParagraphElement>('status');
   const inksBox = need<HTMLDivElement>('r-inks');
-  srcBox.value = DEMO_SOURCE;
 
   const machine = makeCPC();
   const cpu = makeZ80(machine.bus);
@@ -33,14 +58,22 @@ export function startApp(): void {
   let running = false;
   let codeSize = 0;
   let snapshot: Uint8Array | null = null;
+  let lastBuild: AssembleResult | null = null;
 
-  function showErrors(errors: AssembleError[]): void {
+  const initialSource = sourceFromHash(location.hash) ?? DEMO_SOURCE;
+  const editor = makeEditor({
+    parent: need('editor'),
+    doc: initialSource,
+    onChange: scheduleBuild,
+  });
+
+  function status(text: string): void {
+    statusBox.textContent = text;
+  }
+
+  function showErrors(errors: AssembleResult['errors']): void {
     errBox.innerHTML = '';
-    okBox.textContent = '';
-    if (!errors.length) {
-      okBox.textContent = `Assembled ${codeSize} bytes. Running.`;
-      return;
-    }
+    okBox.textContent = errors.length ? '' : `Assembled ${codeSize} bytes.`;
     for (const e of errors.slice(0, 12)) {
       const li = document.createElement('li');
       li.textContent = `line ${e.line}: ${e.message}`;
@@ -54,21 +87,47 @@ export function startApp(): void {
   }
 
   function build(): boolean {
-    const result = assemble(srcBox.value);
-    if (result.errors.length) { codeSize = 0; showErrors(result.errors); return false; }
+    const result = assemble(editor.getValue());
+    lastBuild = result;
+    editor.setErrors(result.errors);
+    if (result.errors.length) {
+      codeSize = 0;
+      showErrors(result.errors);
+      status(`${result.errors.length} error${result.errors.length > 1 ? 's' : ''}.`);
+      return false;
+    }
+    editor.setSymbols(Object.keys(result.symbols));
     codeSize = result.end - result.start;
     machine.reset();
     machine.ram.fill(0);
     for (let a = result.start; a < result.end; a++) machine.ram[a] = result.bytes[a];
     cpu.reset();
     cpu.PC = 'START' in result.symbols ? result.symbols['START'] : result.start;
-    snapshot = snapshotSNA(cpu, machine); // captured at the entry point
+    snapshot = snapshotSNA(cpu, machine);
     need('r-size').textContent = `${codeSize} bytes`;
+    need<HTMLInputElement>('dl-load').placeholder = hex4(result.start);
+    need<HTMLInputElement>('dl-entry').placeholder = hex4(cpu.PC);
     showErrors([]);
-    if (!('FONT' in result.symbols)) return true;
-    const f = result.symbols['FONT'];
-    drawWordmark(need<HTMLCanvasElement>('wordmark'), Array.from(machine.ram.slice(f, f + 472)));
+    status(`Assembled ${codeSize} bytes. Running.`);
+    if ('FONT' in result.symbols) {
+      const f = result.symbols['FONT'];
+      drawWordmark(need<HTMLCanvasElement>('wordmark'), Array.from(machine.ram.slice(f, f + 472)));
+    }
     return true;
+  }
+
+  let rebuildTimer = 0;
+  function scheduleBuild(): void {
+    clearTimeout(rebuildTimer);
+    rebuildTimer = window.setTimeout(() => {
+      if (build()) setRunning(true);
+      else setRunning(false);
+    }, REBUILD_MS);
+  }
+
+  function loadSource(source: string): void {
+    editor.setValue(source);
+    if (build()) { setRunning(true); paint(); } else setRunning(false);
   }
 
   function paint(): void {
@@ -95,7 +154,7 @@ export function startApp(): void {
     if (!last) last = now;
     acc += now - last;
     last = now;
-    if (acc > 120) acc = 120; // never try to catch up more than six frames
+    if (acc > 120) acc = 120;
     let drawn = false;
     while (acc >= FRAME_MS) { acc -= FRAME_MS; runFrame(cpu, machine); drawn = true; }
     if (drawn) paint();
@@ -106,32 +165,136 @@ export function startApp(): void {
     need('pause').textContent = on ? 'Pause' : 'Resume';
   }
 
+  // --- download menu ------------------------------------------------
+  function assembledBytes(): Uint8Array | null {
+    if (!lastBuild || lastBuild.errors.length) return null;
+    return new Uint8Array(lastBuild.bytes.subarray(lastBuild.start, lastBuild.end));
+  }
+
+  function download(): void {
+    const code = assembledBytes();
+    if (!code || !lastBuild) { status('Nothing assembled to download.'); return; }
+    const name = (need<HTMLInputElement>('dl-name').value.trim() || 'DEMO').toUpperCase().slice(0, 8);
+    const load = parseAddr(need<HTMLInputElement>('dl-load').value) ?? lastBuild.start;
+    const entry = parseAddr(need<HTMLInputElement>('dl-entry').value)
+      ?? ('START' in lastBuild.symbols ? lastBuild.symbols['START'] : lastBuild.start);
+    const meta = { filename: name + '.bin', loadAddr: load, entryAddr: entry };
+    const fmt = need<HTMLSelectElement>('dl-format').value;
+    const note = need('dl-note');
+    note.textContent = '';
+
+    if (fmt === 'sna') {
+      if (!snapshot) { status('No snapshot.'); return; }
+      downloadBytes(name + '.sna', snapshot);
+    } else if (fmt === 'bin') {
+      const withHeader = need<HTMLInputElement>('dl-header').checked;
+      downloadBytes(name + '.bin', withHeader ? withAmsdosHeader(code, meta) : code);
+    } else if (fmt === 'dsk') {
+      downloadBytes(name + '.dsk', makeDsk(code, meta));
+      note.textContent = `Mount it, then: RUN"${name}"`;
+    } else if (fmt === 'cdt') {
+      downloadBytes(name + '.cdt', makeCdt(code, meta));
+      note.textContent = 'Load with RUN""';
+    }
+    status(`Downloaded ${name}.${fmt}`);
+  }
+
+  need<HTMLSelectElement>('dl-format').addEventListener('change', (e) => {
+    const fmt = (e.target as HTMLSelectElement).value;
+    need('dl-header').parentElement!.hidden = fmt !== 'bin';
+  });
+
+  // --- examples and revisions -------------------------------------
+  const examplesSel = need<HTMLSelectElement>('examples');
+  for (const ex of EXAMPLES) {
+    const o = document.createElement('option');
+    o.value = ex.id;
+    o.textContent = ex.title;
+    examplesSel.appendChild(o);
+  }
+  examplesSel.addEventListener('change', () => {
+    const ex = EXAMPLES.find((x) => x.id === examplesSel.value);
+    examplesSel.value = '';
+    if (ex) { loadSource(ex.source); status(`Loaded example: ${ex.title}`); }
+  });
+
+  const revsSel = need<HTMLSelectElement>('revisions');
+  function refreshRevisions(select = ''): void {
+    revsSel.innerHTML = '<option value="">—</option>';
+    for (const r of listRevisions()) {
+      const o = document.createElement('option');
+      o.value = r.name;
+      o.textContent = r.name;
+      revsSel.appendChild(o);
+    }
+    revsSel.value = select;
+  }
+  refreshRevisions();
+  revsSel.addEventListener('change', () => {
+    const r = getRevision(revsSel.value);
+    if (r) { loadSource(r.source); status(`Loaded revision: ${r.name}`); }
+  });
+  need('rev-save').addEventListener('click', () => {
+    const name = prompt('Name this revision')?.trim();
+    if (!name) return;
+    saveRevision(name, editor.getValue());
+    refreshRevisions(name);
+    status(`Saved revision: ${name}`);
+  });
+  need('rev-delete').addEventListener('click', () => {
+    const name = revsSel.value;
+    if (!name) return;
+    deleteRevision(name);
+    refreshRevisions();
+    status(`Deleted revision: ${name}`);
+  });
+
+  // --- share, screenshot, record ---------------------------------
+  need('share').addEventListener('click', async () => {
+    history.replaceState(null, '', hashForSource(editor.getValue()));
+    try {
+      await navigator.clipboard.writeText(location.href);
+      status('Share link copied to the clipboard.');
+    } catch {
+      status('Share link is in the address bar.');
+    }
+  });
+
+  need('shot').addEventListener('click', async () => {
+    const name = (need<HTMLInputElement>('dl-name').value.trim() || 'DEMO').toUpperCase().slice(0, 8);
+    downloadBlob(name + '.png', await screenshot(canvas));
+  });
+
+  let recorder: Recorder | null = null;
+  need('rec').addEventListener('click', async () => {
+    const btn = need('rec');
+    if (recorder) {
+      const blob = await recorder.stop();
+      recorder = null;
+      btn.textContent = 'Record';
+      const name = (need<HTMLInputElement>('dl-name').value.trim() || 'DEMO').toUpperCase().slice(0, 8);
+      downloadBlob(name + '.webm', blob);
+      status('Saved recording.');
+      return;
+    }
+    recorder = record(canvas);
+    if (!recorder) { status('Recording is not supported in this browser.'); return; }
+    btn.textContent = 'Stop recording';
+    status('Recording…');
+  });
+
+  // --- buttons ---------------------------------------------------
   need('assemble').addEventListener('click', () => {
-    if (build()) { setRunning(true); paint(); }
-    else setRunning(false);
+    if (build()) { setRunning(true); paint(); } else setRunning(false);
   });
   need('pause').addEventListener('click', () => setRunning(!running));
-  need('export').addEventListener('click', () => {
-    if (!snapshot) return;
-    const url = URL.createObjectURL(new Blob([snapshot as BlobPart], { type: 'application/octet-stream' }));
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'raster.sna';
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
-  });
   need('reset').addEventListener('click', () => { build(); setRunning(true); paint(); });
-  need('restore').addEventListener('click', () => {
-    srcBox.value = DEMO_SOURCE;
-    build();
-    setRunning(true);
-    paint();
-  });
+  need('restore').addEventListener('click', () => loadSource(DEMO_SOURCE));
+  need('dl-go').addEventListener('click', download);
 
-  attachKeyboard(machine, srcBox);
+  attachKeyboard(machine, () => editor.hasFocus());
 
+  need('dl-header').parentElement!.hidden = true;
   build();
   setRunning(true);
   requestAnimationFrame(tick);

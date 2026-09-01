@@ -12,13 +12,11 @@
 
 ## The size of this
 
-This is not "add ROM paging". It is **make the hardware model complete enough
-that Amstrad's OS runs on it.** Our emulator today is tuned for code that pages
-the ROMs out and talks to bare metal. The firmware does none of that — it reads
-the keyboard through the PSG, leans on CRTC and PPI behaviour we shortcut, runs
-a 300 Hz timer, and expects its RAM workspace to survive. Getting it to the
-`Ready` prompt is a phase, not a PR, and the honest first step is a **spike**:
-load the ROMs, wire paging, run, and see where it dies.
+The spike ([`rom-boot-findings.md`](rom-boot-findings.md)) settled the open
+question: the 464 firmware boots to `Ready` and takes keyboard input on the
+hardware model we already have, with only ROM paging added. Getting BASIC
+running is now small. The bulk of the remaining work is the **disc** side — a
+µPD765A FDC and AMSDOS — so an exported `.dsk` can be `RUN"` in-app.
 
 ## Which machine
 
@@ -118,14 +116,18 @@ Rough; re-plan after the spike.
    snapshotted. No images load yet, so behaviour is unchanged. Read hit measured
    ~12% on the demo (43→38× realtime) — inside headroom. Power-on config stays
    `&8D` (both off); the firmware-on default lands with PR 2's boot.
-2. **Load + boot spike** — bundle `cpc464.rom`, fetch at startup, boot with no
-   disc, screenshot where it gets to. Deliverable is a **findings note**, not a
-   feature.
-3. **Firmware hardware gaps** — whatever the spike surfaces: PSG keyboard read
-   (R14), PPI details, CRTC registers the screen driver needs, the 300 Hz
-   timer, `HALT` behaviour. Likely several PRs.
-4. **`Ready` prompt** — keyboard input reaches BASIC, text output renders,
-   `PRINT` works. A "Machine" switch in the UI: *bare* (today) vs *firmware*.
+2. ✅ **Load + boot spike** (`src/cpc/roms.ts`, `installFirmware`) — committed
+   `cpc464.rom` + `amsdos.rom`, booted with no disc. Result: reaches the BASIC
+   `Ready` prompt and takes keyboard input, unchanged hardware model. Full
+   findings: [`rom-boot-findings.md`](rom-boot-findings.md). **The "firmware
+   hardware gaps" risk is retired** — the old PR 3 collapses into PR 4's
+   shakedown.
+3. **UI "Machine" switch** — *bare* (today) vs *firmware*. Fetch the ROM asset
+   (`?url` + `fetch`), `installFirmware`, boot. Confirm `.sna`/example loading
+   still pages the ROMs out. Debugger/time-travel work against a firmware
+   machine.
+4. **BASIC shakedown** — enter and `RUN` a program; `PRINT`, `INK`, `LOCATE`,
+   firmware `SOUND`. Fix whatever the firmware trips on (expected small).
 5. **Minimal FDC 765** — `src/cpc/fdc.ts` + a `.dsk` sector reader. Tests
    against a `.dsk` we build ourselves: Read ID, Seek, Read Data return the
    right bytes.
@@ -135,17 +137,15 @@ Rough; re-plan after the spike.
 
 ## Decisions to flag
 
-- **Commit the ROMs** (redistribution-permitted, universal emulator practice) or
-  fetch-by-script (keeps binaries out of git, but the deploy needs them). Lean
-  commit.
+- ✅ **Commit the ROMs** — done, in `src/cpc/roms/`. Redistribution-permitted,
+  universal emulator practice.
 - **Minimal FDC vs AMSDOS trap** — decide after PR 5's spike.
 - **Standalone-HTML** loses ROMs unless we add a base64 build variant — defer.
-- **Scope creep risk** — "boot the firmware" can absorb weeks. Timebox the spike;
-  if the gap is large, ship the FDC-trap fallback for `.dsk` testing and leave a
-  full firmware boot as its own project.
+- ✅ **Scope creep risk** — the spike retired it: the firmware boots on the
+  model we already have.
 
 ## Effort
 
-PR 1 ~1 day. PR 2 (spike) ~1–2 days. PR 3 unknown until the spike — days to
-weeks. PR 5 ~2–3 days. Everything else depends on PR 3. This is the largest item
-on the roadmap.
+PR 1 ~1 day (done). PR 2 spike ~½ day (done — and cheaper than feared). PR 3
+(UI switch) ~1 day. PR 4 (BASIC shakedown) ~1–3 days. PR 5 (FDC) ~2–3 days.
+PR 6–7 build on PR 5.

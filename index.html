@@ -34,6 +34,13 @@
           <button id="restore">Restore demo</button>
         </div>
 
+        <div class="timeline">
+          <button id="tl-live" title="Jump to the latest frame">Live</button>
+          <input type="range" id="tl-scrub" min="0" max="0" value="0" aria-label="Timeline">
+          <span id="tl-pos">0 / 0</span>
+          <button id="tl-resume" hidden>Resume here</button>
+        </div>
+
         <div class="dbg" id="dbg" hidden>
           <pre id="dbg-regs"></pre>
           <pre id="dbg-code"></pre>

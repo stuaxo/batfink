@@ -106,6 +106,15 @@ describe('playground wiring', () => {
     expect(document.getElementById('dbg-code')!.querySelectorAll('.dbg-line').length).toBeGreaterThan(0);
   });
 
+  it('wires the timeline controls without error', () => {
+    boot();
+    expect(document.getElementById('tl-scrub')).not.toBeNull();
+    expect((document.getElementById('tl-resume') as HTMLElement).hidden).toBe(true);
+    // Live is a no-op with no history, but must not throw
+    expect(() => document.getElementById('tl-live')!.dispatchEvent(new Event('click'))).not.toThrow();
+    expect(document.getElementById('tl-pos')!.textContent).toMatch(/\d+ \/ \d+/);
+  });
+
   it('the debugger shows a hex dump that follows a typed address', () => {
     boot();
     document.getElementById('dbg-step')!.dispatchEvent(new Event('click'));

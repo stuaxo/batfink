@@ -9,7 +9,9 @@ import type { CPCMachine } from './machine';
 export function makeBus(m: CPCMachine): Bus {
   return {
     read: (a) => m.ram[a],
-    write: (a, v) => { m.ram[a] = v; },
+    // m.onWrite is null in run mode (one predictable branch); the debugger
+    // installs it for watchpoints and dirty-region tracking.
+    write: (a, v) => { m.ram[a] = v; if (m.onWrite) m.onWrite(a, v); },
 
     out: (port, v) => {
       if ((port & 0xc000) === 0x4000) { // Gate Array

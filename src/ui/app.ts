@@ -2,7 +2,8 @@
 // lives in ../z80 and ../cpc; this file only touches the page.
 import { assemble, type AssembleResult } from '../asm';
 import { makeZ80 } from '../z80/cpu';
-import { makeCPC, snapshotSNA, CPC_PALETTE, WIDTH, HEIGHT } from '../cpc';
+import { makeCPC, snapshotSNA, AudioSink, CPC_PALETTE, WIDTH, HEIGHT } from '../cpc';
+import { Sound } from './sound';
 import { Debugger } from '../debug/debugger';
 import { Timeline } from '../debug/timeline';
 import { renderGfx } from '../debug/memview';
@@ -61,6 +62,8 @@ export function startApp(opts: AppOptions = {}): void {
   const cpu = makeZ80(machine.bus);
   const debug = new Debugger(cpu, machine);
   const timeline = new Timeline(cpu, machine);
+  const sound = new Sound();
+  let soundOn = false;
   const image = ctx.createImageData(WIDTH, HEIGHT);
   const rgba = image.data;
   let running = false;
@@ -142,6 +145,7 @@ export function startApp(opts: AppOptions = {}): void {
     cpu.reset();
     cpu.PC = 'START' in result.symbols ? result.symbols['START'] : result.start;
     timeline.clear();       // history does not survive a full load
+    machine.audio?.reset();
     debug.state = 'running'; // breakpoints do
     running = true;
     loadedImage = result.bytes.slice();
@@ -230,6 +234,7 @@ export function startApp(opts: AppOptions = {}): void {
     if (frames) {
       debug.runFrames(frames);
       timeline.record();
+      if (machine.audio) sound.push(machine.audio.drain());
       paint();
       updateTimeline();
       if ((machine.frames & 3) === 0) renderGfxView();
@@ -258,6 +263,7 @@ export function startApp(opts: AppOptions = {}): void {
   function pauseExec(): void {
     running = false;
     debug.state = 'paused';
+    sound.flush();
     paint();
     syncControls();
   }
@@ -277,6 +283,7 @@ export function startApp(opts: AppOptions = {}): void {
 
   debug.onStop = () => {
     running = false;
+    sound.flush();
     paint();
     syncControls();
   };
@@ -431,6 +438,7 @@ export function startApp(opts: AppOptions = {}): void {
       seekQueued = false;
       running = false;
       debug.state = 'paused';
+      sound.flush();
       timeline.seek(Number(scrub.value));
       paint();
       syncControls();
@@ -542,6 +550,34 @@ export function startApp(opts: AppOptions = {}): void {
   need('shot').addEventListener('click', async () => {
     const name = (need<HTMLInputElement>('dl-name').value.trim() || 'DEMO').toUpperCase().slice(0, 8);
     downloadBlob(name + '.png', await screenshot(canvas));
+  });
+
+  need('sound').addEventListener('click', async () => {
+    const btn = need('sound');
+    if (soundOn) {
+      soundOn = false;
+      machine.audio = null;
+      machine.psgWrite = null;
+      sound.suspend();
+      btn.textContent = 'Sound off';
+      need('volume').hidden = true;
+      return;
+    }
+    try {
+      await sound.start();
+    } catch {
+      status('Audio is not available in this browser.');
+      return;
+    }
+    machine.audio = new AudioSink(sound.sampleRate);
+    machine.psgWrite = (r, v) => machine.audio?.ay.writeReg(r, v);
+    for (let r = 0; r <= 13; r++) machine.audio.ay.writeReg(r, machine.psg[r]); // catch up
+    soundOn = true;
+    btn.textContent = 'Sound on';
+    need('volume').hidden = false;
+  });
+  need('volume').addEventListener('input', (e) => {
+    sound.setVolume(Number((e.target as HTMLInputElement).value) / 100);
   });
 
   let recorder: Recorder | null = null;

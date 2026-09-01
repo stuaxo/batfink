@@ -71,6 +71,10 @@
   button:active { transform: translateY(3px); box-shadow: 0 0 0 #7d7c70, 0 2px 6px rgba(0,0,0,.35); }
   button:focus-visible { outline: 3px solid var(--cpc-sky); outline-offset: 2px; }
   /* Buttons whose label changes: size to the longest so the layout does not jump. */
+  .machine-pick { display: flex; align-items: center; gap: 6px; font-size: 12px;
+    letter-spacing: .04em; color: var(--legend-dim); }
+  .machine-pick select { font: inherit; font-size: 13px; padding: 6px 8px;
+    border: 0; border-radius: 5px; background: #d8d6c8; color: #12140f; }
   #pause { min-width: 6.5em; }
   #rec { min-width: 5.5em; }
   #sound { min-width: 6em; }

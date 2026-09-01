@@ -32,6 +32,12 @@
           <button id="dbg-over">Step over</button>
           <button id="reset">Reset</button>
           <button id="restore">Restore demo</button>
+          <label class="machine-pick">Machine
+            <select id="machine">
+              <option value="bare" selected>Bare metal</option>
+              <option value="firmware">Firmware (464)</option>
+            </select>
+          </label>
         </div>
 
         <div class="timeline">
@@ -138,8 +144,14 @@
   <section class="notes">
     <h2>What the machine is doing</h2>
     <p>
-      There is no firmware here. The program pages both ROMs out and writes straight to the hardware,
-      which is how demos were actually written.
+      On <b>bare metal</b> there is no firmware: the program pages both ROMs out and writes straight
+      to the hardware, which is how demos were actually written.
+    </p>
+    <p>
+      Switch <b>Machine</b> to <b>Firmware (464)</b> to boot the real OS and BASIC 1.0 to a
+      <code>Ready</code> prompt instead. Your assembled code is loaded at its <code>org</code>
+      address, so you can <code>CALL</code> it from BASIC. Downloads and the debugger work the same
+      in both modes.
     </p>
     <dl>
       <dt>&amp;7F00</dt><dd>Gate Array. Picks an ink, sets its colour, and selects the screen mode.</dd>

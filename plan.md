@@ -11,7 +11,8 @@ step back, watch memory live.
 
 ## Where we are
 
-Phases 1 and 2 are done and deployed.
+Phases 1 and 2 are done and deployed; Phase 3 is under way (sound shipped,
+firmware boots).
 
 - Modular TypeScript, Vite, Vitest. DOM-free emulator, assembler, export and
   debug cores.
@@ -25,7 +26,10 @@ Phases 1 and 2 are done and deployed.
 - Share by URL hash. Named revisions in `localStorage`. Examples gallery.
 - Downloads: `.sna`, `.bin` (± AMSDOS header), `.dsk`, `.cdt`. PNG + WebM capture.
 - Renderer: canvas 2D, palette snapshotted per scanline.
-- No sound. No firmware ROMs. Deployed to GitHub Pages and Cloudflare Workers.
+- Sound: AY-3-8912, synthesised and buffered to Web Audio (Phase 3).
+- Firmware: a Machine switch boots the real 464 ROMs to a BASIC `Ready` prompt
+  (Phase 3). Disc is still to come.
+- Deployed to GitHub Pages and Cloudflare Workers.
 
 ### Verification
 
@@ -89,11 +93,10 @@ selection-total on the gutter; live *editing* in the memory-as-graphics view.
   Web Audio via an AudioWorklet. Register writes are sample-accurate. See
   [`plan/sound.md`](plan/sound.md). Firmware `SOUND` still needs the ROMs.
 - **Firmware ROMs + disc** — boot to a `Ready` prompt, run BASIC, mount an
-  exported `.dsk` and `RUN"` it in-app. ROM paging is in; the boot spike shows
-  the 464 firmware reaches `Ready` and takes keyboard input on the existing
-  hardware model ([`plan/rom-boot-findings.md`](plan/rom-boot-findings.md)).
-  Remaining: a UI machine switch, a BASIC shakedown, then the FDC + AMSDOS for
-  disc. Plan: [`plan/rom.md`](plan/rom.md).
+  exported `.dsk` and `RUN"` it in-app. ROM paging is in, and the **Machine**
+  switch boots the 464 firmware to `Ready` with keyboard input
+  ([`plan/rom-boot-findings.md`](plan/rom-boot-findings.md)). Remaining: a BASIC
+  shakedown, then the FDC + AMSDOS for disc. Plan: [`plan/rom.md`](plan/rom.md).
 - **Per-microsecond palette changes** for mid-line colour splits. Needs a finer
   renderer than the per-scanline snapshot.
 - **Fuller CRTC** — R0–R9 effects, split screens, overscan.

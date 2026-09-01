@@ -51,6 +51,22 @@
           <pre id="dbg-mem"></pre>
         </div>
 
+        <details class="gfxview">
+          <summary>Memory as graphics</summary>
+          <div class="gfx-body">
+            <label>Address <input id="gfx-addr" value="&4000" spellcheck="false"></label>
+            <label>Mode
+              <select id="gfx-mode"><option>0</option><option selected>1</option><option>2</option></select>
+            </label>
+            <label>Width <input id="gfx-w" type="number" min="1" max="128" value="8"> bytes</label>
+            <label>Rows <input id="gfx-h" type="number" min="1" max="272" value="16"></label>
+            <label>Layout
+              <select id="gfx-layout"><option value="linear" selected>linear</option><option value="screen">screen</option></select>
+            </label>
+            <div class="gfx-tube"><canvas id="gfx-canvas"></canvas></div>
+          </div>
+        </details>
+
         <div class="tools">
           <label>Example
             <select id="examples"><option value="">Load an example…</option></select>

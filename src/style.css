@@ -182,6 +182,28 @@
     border-radius: 4px; border: 1px solid #34373c; background: #24272c; color: var(--legend); cursor: pointer; }
   #dbg-mem { color: var(--legend-dim); }
 
+  /* ---- memory as graphics ---- */
+  .gfxview { margin-top: 12px; border: 1px solid #24272c; border-radius: 6px; }
+  .gfxview summary {
+    list-style: none; cursor: pointer; padding: 8px 11px; font-size: 12.5px; font-weight: 600;
+    color: var(--legend);
+  }
+  .gfxview summary::-webkit-details-marker { display: none; }
+  .gfxview[open] summary { border-bottom: 1px solid #24272c; }
+  .gfx-body { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 12px; }
+  .gfx-body label { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--legend-dim); }
+  .gfx-body input, .gfx-body select {
+    font: inherit; font-size: 12.5px; padding: 4px 6px; border-radius: 4px;
+    border: 1px solid #101215; background: #1d2024; color: var(--legend);
+  }
+  .gfx-body input[type=number] { width: 4.5em; }
+  .gfx-body #gfx-addr { width: 7em; }
+  .gfx-tube {
+    flex-basis: 100%; background: #000; border-radius: 6px; padding: 8px; line-height: 0;
+    box-shadow: inset 0 0 0 2px #0b0c0d;
+  }
+  #gfx-canvas { width: 100%; height: auto; image-rendering: pixelated; display: block; }
+
   /* ---- notes ---- */
   .notes { margin-top: 40px; max-width: 74ch; }
   .notes h2 { font-size: 15px; letter-spacing: .04em; color: #e6e9ec; margin: 0 0 8px; }

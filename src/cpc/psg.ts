@@ -16,10 +16,9 @@ export function psgStrobe(m: CPCMachine): void {
       break;
     case 2: { // write
       const reg = m.psgSelect & 0x0f;
-      const value = m.ppiA & REG_MASK[reg];
-      m.psg[reg] = value;
-      m.psgWrite?.(reg, value); // installed by the audio layer (null otherwise)
-      break;
+      m.psg[reg] = m.ppiA & REG_MASK[reg]; // hardware-accurate for the snapshot
+      m.psgWrite?.(reg, m.ppiA); // raw; the synth masks as the chip does, and
+      break; //                     needs to see R13 = 0xFF ("no retrigger")
     }
     // 0 inactive, 1 read — PSG reads are not emulated (nothing needs them; the
     // keyboard is served directly from the matrix in ports.ts).

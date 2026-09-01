@@ -31,14 +31,15 @@ describe('PSG register access', () => {
     expect(m.psg[13]).toBe(0x0f);
   });
 
-  it('notifies psgWrite with the masked value', () => {
+  it('notifies psgWrite with the raw byte (the synth masks like the chip)', () => {
     const m = makeCPC();
     const hook = vi.fn();
     m.psgWrite = hook;
-    psgWrite(m, 7, 0x38); // mixer
-    psgWrite(m, 8, 0x1f);
-    expect(hook).toHaveBeenCalledWith(7, 0x38);
-    expect(hook).toHaveBeenCalledWith(8, 0x1f);
+    psgWrite(m, 1, 0xab); // R1 -> m.psg gets 0x0b, but the hook sees 0xab
+    psgWrite(m, 13, 0xff); // R13 -> m.psg gets 0x0f, hook sees 0xff ("no retrigger")
+    expect(m.psg[1]).toBe(0x0b);
+    expect(hook).toHaveBeenCalledWith(1, 0xab);
+    expect(hook).toHaveBeenCalledWith(13, 0xff);
   });
 
   it('the snapshot carries PSG state', () => {

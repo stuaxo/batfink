@@ -95,6 +95,26 @@ describe('playground wiring', () => {
     expect([...sel.options].some((o) => o.value === 'draft-1')).toBe(true);
   });
 
+  it('Step pauses and shows the debugger panel with registers and code', () => {
+    boot();
+    const panel = document.getElementById('dbg') as HTMLDivElement;
+    expect(panel.hidden).toBe(true);
+    document.getElementById('dbg-step')!.dispatchEvent(new Event('click'));
+    expect(panel.hidden).toBe(false);
+    expect(document.getElementById('pause')!.textContent).toBe('Resume');
+    expect(document.getElementById('dbg-regs')!.textContent).toMatch(/PC [0-9A-F]{4}/);
+    expect(document.getElementById('dbg-code')!.querySelectorAll('.dbg-line').length).toBeGreaterThan(0);
+  });
+
+  it('clicking a disassembly line toggles a breakpoint marker', () => {
+    boot();
+    document.getElementById('dbg-step')!.dispatchEvent(new Event('click'));
+    const line = document.querySelector('#dbg-code .dbg-line') as HTMLElement;
+    expect(line.classList.contains('bp')).toBe(false);
+    line.dispatchEvent(new Event('click', { bubbles: true }));
+    expect(document.querySelector(`#dbg-code .dbg-line[data-addr="${line.dataset.addr}"]`)!.classList.contains('bp')).toBe(true);
+  });
+
   it('shows a RUN" hint when the disc format is chosen', () => {
     boot();
     const fmt = document.getElementById('dl-format') as HTMLSelectElement;

@@ -148,6 +148,22 @@
              font-size: 12px; color: var(--cpc-yellow); }
   .status { margin-top: 12px; min-height: 1.2em; font-size: 12.5px; color: #9fd68c; }
 
+  /* ---- debugger ---- */
+  .dbg { margin-top: 12px; display: grid; gap: 8px; }
+  .dbg pre {
+    margin: 0; padding: 10px; border-radius: 6px; background: #14161a;
+    border: 1px solid #24272c; overflow-x: auto;
+    font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 12px; line-height: 1.5;
+    color: var(--legend);
+  }
+  #dbg-regs { color: var(--cpc-yellow); white-space: pre; }
+  .dbg-line { padding: 0 4px; border-radius: 3px; cursor: pointer; white-space: pre; }
+  .dbg-line:hover { background: rgba(255,255,255,.05); }
+  .dbg-line.at { background: rgba(0,128,255,.22); }
+  .dbg-line.bp { color: var(--cpc-red); }
+  .dbg-line.bp::before { content: "● "; }
+  .dbg-line:not(.bp)::before { content: "  "; }
+
   /* ---- notes ---- */
   .notes { margin-top: 40px; max-width: 74ch; }
   .notes h2 { font-size: 15px; letter-spacing: .04em; color: #e6e9ec; margin: 0 0 8px; }

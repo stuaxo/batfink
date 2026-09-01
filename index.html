@@ -28,8 +28,15 @@
         <div class="keys">
           <button id="assemble" class="primary">Run</button>
           <button id="pause">Pause</button>
+          <button id="dbg-step">Step</button>
+          <button id="dbg-over">Step over</button>
           <button id="reset">Reset</button>
           <button id="restore">Restore demo</button>
+        </div>
+
+        <div class="dbg" id="dbg" hidden>
+          <pre id="dbg-regs"></pre>
+          <pre id="dbg-code"></pre>
         </div>
 
         <div class="tools">

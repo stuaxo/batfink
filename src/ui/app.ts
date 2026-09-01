@@ -2,7 +2,8 @@
 // lives in ../z80 and ../cpc; this file only touches the page.
 import { assemble, type AssembleResult } from '../asm';
 import { makeZ80 } from '../z80/cpu';
-import { makeCPC, runFrame, snapshotSNA, CPC_PALETTE, WIDTH, HEIGHT } from '../cpc';
+import { makeCPC, snapshotSNA, CPC_PALETTE, WIDTH, HEIGHT } from '../cpc';
+import { Debugger } from '../debug/debugger';
 import { DEMO_SOURCE } from '../demo';
 import { EXAMPLES } from '../examples';
 import { withAmsdosHeader, makeDsk, makeCdt } from '../export';
@@ -53,6 +54,7 @@ export function startApp(opts: AppOptions = {}): void {
 
   const machine = makeCPC();
   const cpu = makeZ80(machine.bus);
+  const debug = new Debugger(cpu, machine);
   const image = ctx.createImageData(WIDTH, HEIGHT);
   const rgba = image.data;
   let running = false;
@@ -103,6 +105,7 @@ export function startApp(opts: AppOptions = {}): void {
     for (let a = result.start; a < result.end; a++) machine.ram[a] = result.bytes[a];
     cpu.reset();
     cpu.PC = 'START' in result.symbols ? result.symbols['START'] : result.start;
+    debug.state = 'running'; // a fresh build starts running; breakpoints persist
     snapshot = snapshotSNA(cpu, machine);
     need('r-size').textContent = `${codeSize} bytes`;
     need<HTMLInputElement>('dl-load').placeholder = hex4(result.start);
@@ -150,20 +153,65 @@ export function startApp(opts: AppOptions = {}): void {
   let acc = 0;
   function tick(now: number): void {
     requestAnimationFrame(tick);
-    if (!running) { last = now; return; }
+    if (!running || debug.isPaused()) { last = now; return; }
     if (!last) last = now;
     acc += now - last;
     last = now;
     if (acc > 120) acc = 120;
-    let drawn = false;
-    while (acc >= FRAME_MS) { acc -= FRAME_MS; runFrame(cpu, machine); drawn = true; }
-    if (drawn) paint();
+    let frames = 0;
+    while (acc >= FRAME_MS) { acc -= FRAME_MS; frames++; }
+    if (frames) { debug.runFrames(frames); paint(); }
   }
 
   function setRunning(on: boolean): void {
     running = on;
-    need('pause').textContent = on ? 'Pause' : 'Resume';
+    if (on) debug.state = 'running';
+    else debug.pause();
+    need('pause').textContent = on && !debug.isPaused() ? 'Pause' : 'Resume';
+    renderDebug();
   }
+
+  debug.onStop = () => {
+    running = false;
+    need('pause').textContent = 'Resume';
+    paint();
+    renderDebug();
+  };
+
+  const flagStr = (f: { s: boolean; z: boolean; h: boolean; pv: boolean; n: boolean; c: boolean }): string =>
+    ([['S', f.s], ['Z', f.z], ['H', f.h], ['P', f.pv], ['N', f.n], ['C', f.c]] as const)
+      .map(([label, on]) => (on ? label : label.toLowerCase())).join(' ');
+
+  function renderDebug(): void {
+    const panel = need('dbg');
+    panel.hidden = !debug.isPaused();
+    if (!debug.isPaused()) return;
+    const r = debug.registers();
+    const w = (n: number) => n.toString(16).toUpperCase().padStart(4, '0');
+    need('dbg-regs').textContent =
+      `AF ${w(r.af)}  BC ${w(r.bc)}  DE ${w(r.de)}  HL ${w(r.hl)}\n` +
+      `PC ${w(r.pc)}  SP ${w(r.sp)}  IX ${w(r.ix)}  IY ${w(r.iy)}\n` +
+      `I ${r.i.toString(16).toUpperCase().padStart(2, '0')}  R ${r.r.toString(16).toUpperCase().padStart(2, '0')}  ` +
+      `IM ${r.im}  IFF ${r.iff1 ? 1 : 0}${r.iff2 ? 1 : 0}   [ ${flagStr(r.flags)} ]`;
+    const code = need('dbg-code');
+    code.innerHTML = '';
+    for (const x of debug.disassembleFrom(Math.max(0, r.pc - 4), 14)) {
+      const line = document.createElement('div');
+      line.className = 'dbg-line';
+      line.dataset.addr = String(x.addr);
+      if (x.addr === r.pc) line.classList.add('at');
+      if (debug.breakpoints.has(x.addr)) line.classList.add('bp');
+      line.textContent = `${w(x.addr)}  ${x.text}`;
+      code.appendChild(line);
+    }
+  }
+
+  need('dbg-code').addEventListener('click', (e) => {
+    const line = (e.target as HTMLElement).closest<HTMLElement>('.dbg-line');
+    if (!line?.dataset.addr) return;
+    debug.toggleBreakpoint(Number(line.dataset.addr));
+    renderDebug();
+  });
 
   // --- download menu ------------------------------------------------
   function assembledBytes(): Uint8Array | null {
@@ -287,10 +335,12 @@ export function startApp(opts: AppOptions = {}): void {
   need('assemble').addEventListener('click', () => {
     if (build()) { setRunning(true); paint(); } else setRunning(false);
   });
-  need('pause').addEventListener('click', () => setRunning(!running));
+  need('pause').addEventListener('click', () => setRunning(debug.isPaused()));
   need('reset').addEventListener('click', () => { build(); setRunning(true); paint(); });
   need('restore').addEventListener('click', () => loadSource(DEMO_SOURCE));
   need('dl-go').addEventListener('click', download);
+  need('dbg-step').addEventListener('click', () => debug.step());
+  need('dbg-over').addEventListener('click', () => debug.stepOver());
 
   attachKeyboard(machine, () => editor.hasFocus());
 

@@ -21,8 +21,10 @@ export class Timeline {
     private readonly m: CPCMachine,
     opts: { interval?: number; maxSnaps?: number } = {},
   ) {
-    this.interval = opts.interval ?? 25; // ~0.5s
-    this.maxSnaps = opts.maxSnaps ?? 300; // ~150s of history
+    // Each snapshot is a full ~71 KB machine copy (64 KB RAM + registers +
+    // per-scanline palette). 120 x 0.5s => ~1 min of history, ~8.5 MB.
+    this.interval = opts.interval ?? 25;
+    this.maxSnaps = opts.maxSnaps ?? 120;
   }
 
   /** Wipe history — call on reset / rebuild. */

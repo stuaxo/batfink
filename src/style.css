@@ -70,6 +70,9 @@
   }
   button:active { transform: translateY(3px); box-shadow: 0 0 0 #7d7c70, 0 2px 6px rgba(0,0,0,.35); }
   button:focus-visible { outline: 3px solid var(--cpc-sky); outline-offset: 2px; }
+  /* Buttons whose label changes: size to the longest so the layout does not jump. */
+  #pause { min-width: 6.5em; }
+  #rec { min-width: 5.5em; }
   button.primary { color: #1a1400; background: linear-gradient(180deg, #ffe75c, #f0c400); box-shadow: 0 3px 0 #9a7d00, 0 5px 10px rgba(0,0,0,.35); }
   button.primary:active { box-shadow: 0 0 0 #9a7d00, 0 2px 6px rgba(0,0,0,.35); }
 

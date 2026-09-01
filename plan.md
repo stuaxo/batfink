@@ -44,8 +44,9 @@ Remaining gaps are undocumented `YF`/`XF` bits on SCF/CCF, `BIT n,(HL)`,
 
 `.dsk` now round-trips in-app: `test/integration/emulator/fdc-amsdos.itest.ts`
 mounts one built by `makeDsk` and the real AMSDOS ROM `CAT`s and `RUN"`s it.
-`.cdt` is still only structurally tested — the firmware tape path (PR 7) is the
-equivalent check. The Tier C MAME cross-check stays designed, not built.
+`.cdt` is still only structurally tested — the equivalent check needs the
+firmware tape path ([`plan/cassette.md`](plan/cassette.md)). The Tier C MAME
+cross-check stays designed, not built.
 
 ## The seams
 
@@ -87,8 +88,7 @@ Done.
 - ✅ **Instruction trace** (`src/debug/trace.ts`) — opt-in ring of the last 1024
   instructions.
 
-Follow-ups if wanted: roll the profiler up to top-level routines; a
-selection-total on the gutter; live *editing* in the memory-as-graphics view.
+Small follow-ups are listed under Deferred.
 
 ## Phase 3 — fidelity
 
@@ -99,11 +99,14 @@ selection-total on the gutter; live *editing* in the memory-as-graphics view.
   to a BASIC `Ready` prompt; BASIC checks out (PRINT, RUN, INK, SOUND, CALL); a
   minimal 765 FDC ([`plan/fdc.md`](plan/fdc.md)) plus a **Disc** mount control
   let AMSDOS `CAT` and `RUN"` a disc — the current listing or a `.dsk` from your
-  machine. Cassette `RUN"` (`.cdt` via the firmware tape routines) is left as a
-  separate job. Plans: [`plan/rom.md`](plan/rom.md),
+  machine. Plans: [`plan/rom.md`](plan/rom.md),
   [`plan/rom-boot-findings.md`](plan/rom-boot-findings.md).
+- **Cassette `RUN""`** — emulate the bit-banged tape port so an exported `.cdt`
+  loads in-app, the tape equivalent of the disc mount. Not scheduled; design
+  sketch in [`plan/cassette.md`](plan/cassette.md).
 - **Per-microsecond palette changes** for mid-line colour splits. Needs a finer
-  renderer than the per-scanline snapshot.
+  renderer than the per-scanline snapshot. Pairs with the WebGL renderer move
+  (see Architecture decisions).
 - **Fuller CRTC** — R0–R9 effects, split screens, overscan.
 
 ## Phase 4 — content tools
@@ -132,16 +135,24 @@ nicer dialect. The differential tests guard against regressions.
 
 ## Deferred
 
-- Tier C integration test — load `.sna`/`.dsk`/`.cdt` into headless MAME
-  `cpc6128`, assert the program took over the screen. Designed in
-  `.claude/plans/`; not built.
-- Renderer cross-check (MAME output vs ours).
+- **Seam 3** (above) — CPU as a class + the interpreter perf win. ~2× throughput,
+  its own PR.
+- **Tier C integration test** — load `.sna`/`.dsk`/`.cdt` into headless MAME
+  `cpc6128` and assert the program took over the screen. Design in
+  `test/integration/README.md` ("Tier C"); not built. `fdc-amsdos.itest.ts` now
+  covers `.dsk` in-app, which was the main motivation.
+- **Renderer cross-check** — MAME's framebuffer vs ours, pixel for pixel.
+- **Phase 2 follow-ups** — profiler rolled up to top-level routines; a
+  selection-total on the T-state gutter; live editing in the memory-as-graphics
+  view.
 
 ## Settled
 
 - Editor: CodeMirror 6, legacy `z80` stream mode.
 - Hash compression: `lz-string`.
 - Capture: WebM via `MediaRecorder`. No GIF.
-- Disc: DATA format only. SYSTEM-format autoboot (`RUN"DISC"`) needs a CP/M boot
-  sector and FDC 765 — a Phase 3 job.
+- Disc: the exporter writes DATA format only, and the FDC ([`plan/fdc.md`](plan/fdc.md))
+  is minimal — standard `.dsk`, no weak sectors or copy protection. Extended
+  `.dsk`, protected images and SYSTEM-format autoboot are later upgrades if a
+  real need turns up.
 - Conformance testing: SingleStepTests is the gate; zexdoc/zexall are opt-in.

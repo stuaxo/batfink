@@ -54,6 +54,34 @@ with `Z80_SST_DIR`.
 | `ZEX=1`, `ZEXALL=1` | run the slow Cringle exercisers |
 | `WRITE_CORPUS=1` | regenerate `differential/corpus/opcodes.neutral.asm` |
 
+## Tier C — MAME cross-check (designed, not built)
+
+An `emulator/exports-mame.itest.ts`, `describe.skipIf(!MAME || !MAME_ROMPATH)`.
+The tester supplies CPC ROMs via `MAME_ROMPATH` (Amstrad copyright — never
+committed, never in CI; unrelated to `src/cpc/roms/`, which are the firmware
+images bundled with the app).
+
+Per `EXAMPLES` entry: `boot(source)`, then build each export —
+`snapshotSNA(cpu, m)`, `makeDsk(bytes, …)`, `makeCdt(bytes, …)` — and launch
+headless MAME:
+
+```
+SDL_VIDEODRIVER=offscreen mame cpc6128 -rompath $MAME_ROMPATH \
+  -video soft -sound none -nothrottle -seconds_to_run 8 -skip_gameinfo \
+  -autoboot_script emulator/lua/capture.lua \
+  <per format: -snapshot prog.sna
+             | -flop1 prog.dsk -autoboot_delay 3 -autoboot_command 'run"PROG\n'
+             | -cass  prog.cdt -autoboot_delay 3 -autoboot_command 'run""\n'>
+```
+
+`capture.lua` waits ~250 frames, dumps the visible screen as raw RGBA to
+`$BATFINK_CAP`, exits. `beforeAll` captures a no-media "BASIC ready" reference.
+**Assert:** the capture parses, has > 2 distinct colours, and differs from the
+reference by > 5 % of pixels (the program took over).
+
+Now largely superseded for `.dsk` by `fdc-amsdos.itest.ts` (real AMSDOS ROM,
+no MAME). Still the only cross-check for the renderer and for `.cdt`.
+
 ## Known core gaps (baselined)
 
 Surfaced by this suite, accepted for now:

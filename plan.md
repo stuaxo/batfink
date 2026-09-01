@@ -1,5 +1,8 @@
 # Plan
 
+The roadmap and status. Big features get a detailed design doc in `plan/` once
+they're about to be built.
+
 ## Goal
 
 Make the loop the product: type code, it runs, you send someone a link. Then
@@ -82,8 +85,8 @@ selection-total on the gutter; live *editing* in the memory-as-graphics view.
 
 ## Phase 3 — fidelity
 
-- **Sound** — AY-3-8912 through WebAudio. The biggest gap; CPC demos are half
-  music.
+- **Sound** — AY-3-8912, synthesised in the emulator, buffered to Web Audio.
+  The biggest gap; CPC demos are half music. Detailed plan: [`plan/sound.md`](plan/sound.md).
 - **Firmware ROMs** (Amstrad permit redistribution). Unlocks BASIC and AMSDOS,
   and mounting an exported `.dsk`/`.cdt` to `RUN"` it in-app — closes the
   "not verified on hardware" gap. Needs FDC 765 emulation.

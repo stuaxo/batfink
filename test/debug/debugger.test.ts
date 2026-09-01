@@ -67,6 +67,15 @@ describe('Debugger', () => {
     expect(cpu.PC).not.toBe(sym['INC2']);
   });
 
+  it('resume does not advance when the PC is not on a breakpoint', () => {
+    const { dbg, cpu } = boot();
+    dbg.step(); // LD A,1 -> PC 0x4002, no breakpoint here
+    const pc = cpu.PC;
+    dbg.resume();
+    expect(cpu.PC).toBe(pc);
+    expect(dbg.isPaused()).toBe(false);
+  });
+
   it('toggleBreakpoint adds then removes', () => {
     const { dbg } = boot();
     expect(dbg.toggleBreakpoint(0x4002)).toBe(true);

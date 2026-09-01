@@ -47,8 +47,8 @@ export class Debugger {
 
   resume(): void {
     if (this.state !== 'paused') return;
-    // Clear a breakpoint sitting on the current PC before running.
-    runUntil(this.cpu, this.m, { maxSteps: 1 });
+    // Step past a breakpoint sitting on the current PC so we don't re-trigger it.
+    if (this.breakpoints.has(this.cpu.PC)) runUntil(this.cpu, this.m, { maxSteps: 1 });
     this.state = 'running';
   }
 

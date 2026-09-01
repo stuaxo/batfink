@@ -115,6 +115,14 @@ Small follow-ups are listed under Deferred.
 - Font editor. Palette picker showing firmware and hardware numbers side by side.
 - Arkos Tracker player integration.
 
+## Hardware variants
+
+The 464 is the identity. Also running **6128** (128K, BASIC 1.1 — a week's work,
+high return) and the **Plus / GX4000** ASIC (4096 colours, hardware sprites,
+raster interrupts, DMA sound — a multi-week, renderer-heavy project best done
+after the WebGL move). Sketch: [`plan/hardware-variants.md`](plan/hardware-variants.md).
+Not scheduled.
+
 ## Assembler track (independent)
 
 Macros, `REPT`/`IRP`, local labels, conditional assembly, `INCLUDE`. Align the

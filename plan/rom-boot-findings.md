@@ -56,9 +56,7 @@ Revised order:
 
 1. ✅ ROM paging (PR 1)
 2. ✅ This spike (PR 2)
-3. **UI: a "Machine" switch** — *bare* (today) vs *firmware*. Fetch the ROM
-   asset, `installFirmware`, boot. Check `.sna`/example loading still pages the
-   ROMs out as before. (Was PR 4; now next.)
+3. ✅ **UI "Machine" switch** — *bare* vs *firmware (464)* (`src/ui/firmware.ts`).
 4. **BASIC shakedown** — type and `RUN` a real program, `PRINT`, firmware
    `SOUND`, `INK`, `LOCATE`. Fix whatever the firmware trips on. Likely small.
 5. **Minimal FDC 765** + `.dsk` sector reader (unchanged, PR 5).

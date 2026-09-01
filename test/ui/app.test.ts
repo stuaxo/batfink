@@ -237,6 +237,39 @@ describe('playground wiring', () => {
     expect(document.querySelector(`#dbg-code .dbg-line[data-addr="${line.dataset.addr}"]`)!.classList.contains('bp')).toBe(true);
   });
 
+  it('the Machine switch boots the firmware and returns to bare metal', async () => {
+    const fs = await import('node:fs');
+    const romsDir = process.cwd() + '/src/cpc/roms/';
+    vi.stubGlobal('fetch', async (u: string) => ({
+      ok: true,
+      arrayBuffer: async () => {
+        const name = u.includes('amsdos') ? 'amsdos.rom' : 'cpc464.rom';
+        return new Uint8Array(fs.readFileSync(romsDir + name)).buffer;
+      },
+    }));
+    vi.stubGlobal('requestAnimationFrame', () => 0); // freeze the tick loop
+    try {
+      boot();
+      const sel = document.getElementById('machine') as HTMLSelectElement;
+      const status = () => document.getElementById('status')!.textContent ?? '';
+      const regs = () => document.getElementById('dbg-regs')!.textContent ?? '';
+
+      sel.value = 'firmware';
+      sel.dispatchEvent(new Event('change'));
+      await vi.waitFor(() => expect(status()).toMatch(/Firmware booting.*CALL &[0-9A-F]{4} from BASIC/));
+      document.getElementById('dbg-step')!.dispatchEvent(new Event('click'));
+      expect(regs()).toMatch(/PC 000[0-9A-F]/); // executing from the reset vector, not the listing
+
+      sel.value = 'bare';
+      sel.dispatchEvent(new Event('change'));
+      await vi.waitFor(() => expect(status()).toMatch(/Assembled \d+ bytes\. Running\./));
+      document.getElementById('dbg-step')!.dispatchEvent(new Event('click'));
+      expect(regs()).toMatch(/PC 4[0-9A-F]{3}/); // back to the assembled listing at &4000
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it('shows a RUN" hint when the disc format is chosen', () => {
     boot();
     const fmt = document.getElementById('dl-format') as HTMLSelectElement;

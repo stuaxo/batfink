@@ -3,6 +3,8 @@
 import { assemble, type AssembleResult } from '../asm';
 import { makeZ80 } from '../z80/cpu';
 import { makeCPC, snapshotSNA, AudioSink, CPC_PALETTE, WIDTH, HEIGHT } from '../cpc';
+import { installFirmware, removeFirmware } from '../cpc/roms';
+import { loadFirmwareRoms, type FirmwareRoms } from './firmware';
 import { Sound } from './sound';
 import { Debugger } from '../debug/debugger';
 import { Timeline } from '../debug/timeline';
@@ -75,6 +77,8 @@ export function startApp(opts: AppOptions = {}): void {
   let loadedImage: Uint8Array | null = null; // the code image last written to RAM
   let loadedStart = 0;
   let loadedEnd = 0;
+  let firmware = false;          // bare metal vs the 464 firmware ROMs
+  let firmwareRoms: FirmwareRoms | null = null;
 
   const initialSource = sourceFromHash(location.hash) ?? DEMO_SOURCE;
   const editor = makeEditor({
@@ -117,11 +121,14 @@ export function startApp(opts: AppOptions = {}): void {
     return result;
   }
 
+  const entryOf = (result: AssembleResult): number =>
+    'START' in result.symbols ? result.symbols['START'] : result.start;
+
   function afterBuild(result: AssembleResult): void {
     codeSize = result.end - result.start;
     need('r-size').textContent = `${codeSize} bytes`;
     need<HTMLInputElement>('dl-load').placeholder = hex4(result.start);
-    need<HTMLInputElement>('dl-entry').placeholder = hex4(cpu.PC);
+    need<HTMLInputElement>('dl-entry').placeholder = hex4(entryOf(result));
     showErrors([]);
     if ('FONT' in result.symbols) {
       const f = result.symbols['FONT'];
@@ -137,13 +144,19 @@ export function startApp(opts: AppOptions = {}): void {
     editor.setTiming(timing);
   }
 
-  /** Reset the machine and load the assembled image. Ends running. */
+  /** Reset the machine and load the assembled image. Ends running. In firmware
+   *  mode the OS boots from &0000 and the code just sits in RAM for `CALL`. */
   function loadFull(result: AssembleResult): void {
+    const roms = firmware ? firmwareRoms : null;
+    const booted = roms !== null;
     machine.reset();
     machine.ram.fill(0);
+    if (roms) installFirmware(machine, roms.rom, { amsdos: roms.amsdos });
+    else removeFirmware(machine);
     for (let a = result.start; a < result.end; a++) machine.ram[a] = result.bytes[a];
     cpu.reset();
-    cpu.PC = 'START' in result.symbols ? result.symbols['START'] : result.start;
+    const entry = entryOf(result);
+    cpu.PC = booted ? 0x0000 : entry;
     timeline.clear();       // history does not survive a full load
     machine.audio?.reset();
     debug.state = 'running'; // breakpoints do
@@ -153,7 +166,9 @@ export function startApp(opts: AppOptions = {}): void {
     loadedEnd = result.end;
     snapshot = snapshotSNA(cpu, machine);
     afterBuild(result);
-    status(`Assembled ${codeSize} bytes. Running.`);
+    status(booted
+      ? `Firmware booting. ${codeSize} bytes at ${hex4(result.start)} — CALL ${hex4(entry)} from BASIC.`
+      : `Assembled ${codeSize} bytes. Running.`);
     syncControls();
   }
 
@@ -599,6 +614,27 @@ export function startApp(opts: AppOptions = {}): void {
   });
 
   // --- buttons ---------------------------------------------------
+  const machineSel = need<HTMLSelectElement>('machine');
+  machineSel.addEventListener('change', async () => {
+    const want = machineSel.value === 'firmware';
+    if (want && !firmwareRoms) {
+      machineSel.disabled = true;
+      status('Loading firmware ROMs…');
+      try {
+        firmwareRoms = await loadFirmwareRoms();
+      } catch {
+        status('Could not load the firmware ROMs.');
+        machineSel.value = 'bare';
+        machineSel.disabled = false;
+        return;
+      }
+      machineSel.disabled = false;
+    }
+    firmware = want;
+    build();
+    paint();
+  });
+
   need('assemble').addEventListener('click', () => { build(); paint(); });
   need('pause').addEventListener('click', () => (isLive() ? pauseExec() : resumeExec()));
   need('reset').addEventListener('click', () => { build(); paint(); });

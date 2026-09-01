@@ -122,10 +122,10 @@ Rough; re-plan after the spike.
    findings: [`rom-boot-findings.md`](rom-boot-findings.md). **The "firmware
    hardware gaps" risk is retired** — the old PR 3 collapses into PR 4's
    shakedown.
-3. **UI "Machine" switch** — *bare* (today) vs *firmware*. Fetch the ROM asset
-   (`?url` + `fetch`), `installFirmware`, boot. Confirm `.sna`/example loading
-   still pages the ROMs out. Debugger/time-travel work against a firmware
-   machine.
+3. ✅ **UI "Machine" switch** (`src/ui/firmware.ts`, `#machine` select) — *bare*
+   vs *firmware (464)*. Fetches the ROM assets (`?url` + `fetch`, cached),
+   `installFirmware`, boots from &0000; the assembled listing loads at its `org`
+   for `CALL` from BASIC. Debugger/time-travel/downloads unchanged.
 4. **BASIC shakedown** — enter and `RUN` a program; `PRINT`, `INK`, `LOCATE`,
    firmware `SOUND`. Fix whatever the firmware trips on (expected small).
 5. **Minimal FDC 765** — `src/cpc/fdc.ts` + a `.dsk` sector reader. Tests

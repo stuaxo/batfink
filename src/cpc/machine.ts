@@ -40,6 +40,8 @@ export interface CPCMachine {
   /** set by runFrame when the raster passes RENDER_LINE. */
   frameReady: boolean;
   bus: Bus;
+  /** Optional hook, called after every RAM write. Null in run mode. */
+  onWrite: ((addr: number, value: number) => void) | null;
   setKey(line: number, bit: number, down: boolean): void;
   keyByName(name: string): [number, number] | null;
   /** Reset everything except RAM to power-on state. */
@@ -76,6 +78,7 @@ export function makeCPC(): CPCMachine {
     interruptCounter: 0,
     frames: 0,
     frameReady: false,
+    onWrite: null,
   } as CPCMachine;
 
   m.bus = makeBus(m);

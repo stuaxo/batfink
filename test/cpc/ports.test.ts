@@ -16,6 +16,17 @@ describe('I/O port decode', () => {
     expect(m.pens[16]).toBe(0x04);
   });
 
+  it('onWrite observes RAM writes, and is off by default', () => {
+    const m = makeCPC();
+    m.bus.write(0x8000, 0x11); // no observer -> no throw
+    const seen: Array<[number, number]> = [];
+    m.onWrite = (a, v) => seen.push([a, v]);
+    m.bus.write(0x8001, 0x22);
+    m.bus.write(0x8002, 0x33);
+    expect(seen).toEqual([[0x8001, 0x22], [0x8002, 0x33]]);
+    expect(m.ram[0x8001]).toBe(0x22);
+  });
+
   it('CRTC: register select then write', () => {
     const m = makeCPC();
     m.bus.out(0xbc00, 1); // select R1 (horizontal displayed)

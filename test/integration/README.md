@@ -23,6 +23,7 @@ On a bare checkout, `npm run test:integration` passes with everything skipped.
 | `conformance/single-step.itest.ts` | `fetch:fixtures` | SingleStepTests `z80/v1`, first `SST_CASES` (default 25) per opcode, ratcheted against `baselines/single-step.json` |
 | `differential/opcode-table.itest.ts` | `rasm` and/or `pasmo` | a generated coverage corpus, byte-compared |
 | `differential/examples-rasm.itest.ts` | `rasm` | every example + the demo, byte-compared |
+| `emulator/firmware-boot.itest.ts` | (ROMs are committed) | CPC 464 firmware boots to `Ready` and takes a keystroke |
 
 ## Tools
 

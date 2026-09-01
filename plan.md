@@ -89,9 +89,11 @@ selection-total on the gutter; live *editing* in the memory-as-graphics view.
   Web Audio via an AudioWorklet. Register writes are sample-accurate. See
   [`plan/sound.md`](plan/sound.md). Firmware `SOUND` still needs the ROMs.
 - **Firmware ROMs + disc** — boot to a `Ready` prompt, run BASIC, mount an
-  exported `.dsk` and `RUN"` it in-app. The largest item: it means completing
-  the hardware model enough for Amstrad's OS to run. Detailed plan (and the
-  spike-first approach): [`plan/rom.md`](plan/rom.md).
+  exported `.dsk` and `RUN"` it in-app. ROM paging is in; the boot spike shows
+  the 464 firmware reaches `Ready` and takes keyboard input on the existing
+  hardware model ([`plan/rom-boot-findings.md`](plan/rom-boot-findings.md)).
+  Remaining: a UI machine switch, a BASIC shakedown, then the FDC + AMSDOS for
+  disc. Plan: [`plan/rom.md`](plan/rom.md).
 - **Per-microsecond palette changes** for mid-line colour splits. Needs a finer
   renderer than the per-scanline snapshot.
 - **Fuller CRTC** — R0–R9 effects, split screens, overscan.

@@ -38,3 +38,11 @@ npm run build
 
 This type-checks the code and writes the site to `dist/`. To preview the built
 site, run `npm run preview`.
+
+## Hosting
+
+Every push to `main` builds and deploys to
+[stuaxo.github.io/batfink](https://stuaxo.github.io/batfink/) via GitHub Actions
+(`.github/workflows/pages.yml`). It uses `npm run build:pages`, which sets the
+base path to `/batfink/`. The repo's Pages source must be set to "GitHub
+Actions".

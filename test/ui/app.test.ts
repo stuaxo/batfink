@@ -18,6 +18,7 @@ function fakeEditor(): NonNullable<AppOptions['createEditor']> {
       setValue: (s) => { ta.value = s; },
       setErrors: () => {},
       setSymbols: () => {},
+      setTiming: () => {},
       hasFocus: () => document.activeElement === ta,
       focus: () => ta.focus(),
     };

@@ -37,6 +37,11 @@
         <div class="dbg" id="dbg" hidden>
           <pre id="dbg-regs"></pre>
           <pre id="dbg-code"></pre>
+          <div class="dbg-membar">
+            <label>Memory <input id="dbg-addr" placeholder="follows PC" spellcheck="false"></label>
+            <button id="dbg-runto">Run to address</button>
+          </div>
+          <pre id="dbg-mem"></pre>
         </div>
 
         <div class="tools">

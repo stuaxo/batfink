@@ -204,6 +204,17 @@ export function startApp(opts: AppOptions = {}): void {
       line.textContent = `${w(x.addr)}  ${x.text}`;
       code.appendChild(line);
     }
+
+    const base = (parseAddr(need<HTMLInputElement>('dbg-addr').value) ?? (r.pc & 0xfff0)) & 0xffff;
+    const mem = debug.readMemory(base, 128);
+    const lines: string[] = [];
+    for (let row = 0; row < 8; row++) {
+      const slice = mem.subarray(row * 16, row * 16 + 16);
+      const hexpart = [...slice].map((b) => b.toString(16).padStart(2, '0')).join(' ');
+      const asc = [...slice].map((b) => (b >= 32 && b < 127 ? String.fromCharCode(b) : '.')).join('');
+      lines.push(`${w((base + row * 16) & 0xffff)}  ${hexpart}  ${asc}`);
+    }
+    need('dbg-mem').textContent = lines.join('\n');
   }
 
   need('dbg-code').addEventListener('click', (e) => {
@@ -211,6 +222,11 @@ export function startApp(opts: AppOptions = {}): void {
     if (!line?.dataset.addr) return;
     debug.toggleBreakpoint(Number(line.dataset.addr));
     renderDebug();
+  });
+  need('dbg-addr').addEventListener('input', renderDebug);
+  need('dbg-runto').addEventListener('click', () => {
+    const a = parseAddr(need<HTMLInputElement>('dbg-addr').value);
+    if (a !== null) debug.runToCursor(a);
   });
 
   // --- download menu ------------------------------------------------

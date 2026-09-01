@@ -106,6 +106,15 @@ describe('playground wiring', () => {
     expect(document.getElementById('dbg-code')!.querySelectorAll('.dbg-line').length).toBeGreaterThan(0);
   });
 
+  it('the debugger shows a hex dump that follows a typed address', () => {
+    boot();
+    document.getElementById('dbg-step')!.dispatchEvent(new Event('click'));
+    const addr = document.getElementById('dbg-addr') as HTMLInputElement;
+    addr.value = '&4000';
+    addr.dispatchEvent(new Event('input'));
+    expect(document.getElementById('dbg-mem')!.textContent).toMatch(/^4000 /);
+  });
+
   it('clicking a disassembly line toggles a breakpoint marker', () => {
     boot();
     document.getElementById('dbg-step')!.dispatchEvent(new Event('click'));

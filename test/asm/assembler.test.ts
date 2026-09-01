@@ -16,6 +16,13 @@ describe('assembler', () => {
     expect(bytesOf('  db &FF, %1010, 0x0F, 16')).toEqual([0xff, 0x0a, 0x0f, 16]);
   });
 
+  it('accepts an indented label', () => {
+    const r = assemble('  org &4000\n    loop:  djnz loop');
+    expect(r.errors).toEqual([]);
+    expect(r.symbols['LOOP']).toBe(0x4000);
+    expect(Array.from(r.bytes.slice(0x4000, 0x4002))).toEqual([0x10, 0xfe]);
+  });
+
   it('resolves forward label references across the two passes', () => {
     const r = assemble('  org &4000\nstart:\n  jp target\ntarget:\n  ret');
     expect(r.errors).toEqual([]);

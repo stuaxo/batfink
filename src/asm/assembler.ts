@@ -137,7 +137,7 @@ export function assemble(source: string): AssembleResult {
       const startPC = pc;
       try {
         let label: string | null = null;
-        let m = /^([A-Za-z_.@][A-Za-z0-9_.@]*)\s*:/.exec(text);
+        let m = /^\s*([A-Za-z_.@][A-Za-z0-9_.@]*)\s*:/.exec(text);
         if (m) {
           label = m[1];
           text = text.slice(m[0].length);

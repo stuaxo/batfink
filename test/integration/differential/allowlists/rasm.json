@@ -1,0 +1,5 @@
+{
+  "_comment": "Corpus lines where rasm and our assembler legitimately differ. rasm shares our Amstrad dialect, so seed this empty and treat every diff as a real finding.",
+  "skipContains": [],
+  "knownDiffs": []
+}

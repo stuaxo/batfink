@@ -12,5 +12,7 @@ export default defineConfig({
     // The emulator core is DOM-free, so tests run in plain Node.
     environment: 'node',
     include: ['test/**/*.test.ts'],
+    // Opt-in integration tests have their own config (vitest.integration.config.ts).
+    exclude: ['test/integration/**', 'node_modules/**'],
   },
 });

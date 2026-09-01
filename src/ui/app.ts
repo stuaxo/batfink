@@ -4,6 +4,7 @@ import { assemble, type AssembleResult } from '../asm';
 import { makeZ80 } from '../z80/cpu';
 import { makeCPC, snapshotSNA, CPC_PALETTE, WIDTH, HEIGHT } from '../cpc';
 import { Debugger } from '../debug/debugger';
+import { Timeline } from '../debug/timeline';
 import { DEMO_SOURCE } from '../demo';
 import { EXAMPLES } from '../examples';
 import { withAmsdosHeader, makeDsk, makeCdt } from '../export';
@@ -55,6 +56,7 @@ export function startApp(opts: AppOptions = {}): void {
   const machine = makeCPC();
   const cpu = makeZ80(machine.bus);
   const debug = new Debugger(cpu, machine);
+  const timeline = new Timeline(cpu, machine);
   const image = ctx.createImageData(WIDTH, HEIGHT);
   const rgba = image.data;
   let running = false;
@@ -106,6 +108,7 @@ export function startApp(opts: AppOptions = {}): void {
     cpu.reset();
     cpu.PC = 'START' in result.symbols ? result.symbols['START'] : result.start;
     debug.state = 'running'; // a fresh build starts running; breakpoints persist
+    timeline.clear();
     snapshot = snapshotSNA(cpu, machine);
     need('r-size').textContent = `${codeSize} bytes`;
     need<HTMLInputElement>('dl-load').placeholder = hex4(result.start);
@@ -160,7 +163,20 @@ export function startApp(opts: AppOptions = {}): void {
     if (acc > 120) acc = 120;
     let frames = 0;
     while (acc >= FRAME_MS) { acc -= FRAME_MS; frames++; }
-    if (frames) { debug.runFrames(frames); paint(); }
+    if (frames) {
+      debug.runFrames(frames);
+      timeline.record();
+      paint();
+      updateTimeline();
+    }
+  }
+
+  const scrub = need<HTMLInputElement>('tl-scrub');
+  function updateTimeline(): void {
+    scrub.max = String(timeline.latest);
+    if (!timeline.reviewing) scrub.value = String(timeline.latest);
+    need('tl-pos').textContent = `${scrub.value} / ${timeline.latest}`;
+    need('tl-resume').hidden = !timeline.reviewing;
   }
 
   function setRunning(on: boolean): void {
@@ -227,6 +243,33 @@ export function startApp(opts: AppOptions = {}): void {
   need('dbg-runto').addEventListener('click', () => {
     const a = parseAddr(need<HTMLInputElement>('dbg-addr').value);
     if (a !== null) debug.runToCursor(a);
+  });
+
+  let seekQueued = false;
+  scrub.addEventListener('input', () => {
+    if (seekQueued) return;
+    seekQueued = true;
+    requestAnimationFrame(() => {
+      seekQueued = false;
+      running = false;
+      debug.state = 'paused';
+      timeline.seek(Number(scrub.value));
+      need('pause').textContent = 'Resume';
+      paint();
+      renderDebug();
+      updateTimeline();
+    });
+  });
+  need('tl-live').addEventListener('click', () => {
+    timeline.goLive();
+    setRunning(true);
+    paint();
+    updateTimeline();
+  });
+  need('tl-resume').addEventListener('click', () => {
+    timeline.resumeHere();
+    setRunning(true);
+    updateTimeline();
   });
 
   // --- download menu ------------------------------------------------
@@ -358,10 +401,18 @@ export function startApp(opts: AppOptions = {}): void {
   need('dbg-step').addEventListener('click', () => debug.step());
   need('dbg-over').addEventListener('click', () => debug.stepOver());
 
-  attachKeyboard(machine, () => editor.hasFocus());
+  attachKeyboard({
+    isEditing: () => editor.hasFocus(),
+    onKey: (line, bit, down) => {
+      if (timeline.reviewing) return; // ignore live keys while scrubbing history
+      machine.setKey(line, bit, down);
+      timeline.recordKey(line, bit, down);
+    },
+  });
 
   need('dl-header').parentElement!.hidden = true;
   build();
   setRunning(true);
+  updateTimeline();
   requestAnimationFrame(tick);
 }

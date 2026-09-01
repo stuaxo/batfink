@@ -29,7 +29,7 @@ line:  push af
        inc a
        cp 200
        jr c,line
-stop:  jr stop
+spin:  jr spin
 
 band:  ld b,20
 b1:    ld (hl),a

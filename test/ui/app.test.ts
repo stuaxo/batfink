@@ -180,6 +180,17 @@ describe('playground wiring', () => {
     expect(out.textContent).toMatch(/[0-9A-F]{4} {2}\S.*A=[0-9a-f]{2}/);
   });
 
+  it('the sound button reports gracefully when audio is unavailable', async () => {
+    boot();
+    const btn = document.getElementById('sound')!;
+    expect(btn.textContent).toBe('Sound off');
+    btn.dispatchEvent(new Event('click'));
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(document.getElementById('status')!.textContent).toMatch(/[Aa]udio is not available/);
+    expect(btn.textContent).toBe('Sound off');
+  });
+
   it('the frame-budget profiler produces a breakdown', () => {
     boot();
     document.getElementById('prof-measure')!.dispatchEvent(new Event('click'));

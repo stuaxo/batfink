@@ -1,0 +1,24 @@
+{
+  "name": "batfink",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Amstrad CPC 464 dev environment: Z80 emulator, assembler and playground",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "deploy": "npm run build && wrangler deploy"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20240925.0",
+    "happy-dom": "^20.12.0",
+    "typescript": "^5.7.2",
+    "vite": "^6.0.7",
+    "vitest": "^3.0.2",
+    "wrangler": "^3.99.0"
+  }
+}

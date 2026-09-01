@@ -1,0 +1,2446 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Amstrad CPC 464 — Z80 demo and assembler</title>
+<style>
+  :root {
+    /* Case and monitor, taken from the machine itself */
+    --case:      #26282c;
+    --case-dark: #191b1e;
+    --case-edge: #35383d;
+    --legend:    #a9aeb4;
+    --legend-dim:#6f757c;
+    /* Listing paper: 1980s green-bar fanfold */
+    --paper:     #f4f2e7;
+    --paper-bar: #dce8d4;
+    --paper-ink: #2f3330;
+    --paper-edge:#c9c6b6;
+    /* Accents are real CPC hardware colours */
+    --cpc-yellow:#ffff00;
+    --cpc-sky:   #0080ff;
+    --cpc-red:   #ff0000;
+    --cpc-blue:  #000080;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: var(--case-dark);
+    color: var(--legend);
+    font-family: "Segoe UI", system-ui, -apple-system, Roboto, Helvetica, Arial, sans-serif;
+    font-size: 15px;
+    line-height: 1.55;
+    padding: 28px 20px 64px;
+  }
+  .wrap { max-width: 1180px; margin: 0 auto; }
+
+  header { margin-bottom: 26px; }
+  #wordmark { display: block; image-rendering: pixelated; height: auto; max-width: 100%; }
+  .standfirst {
+    max-width: 62ch; margin: 14px 0 0; color: var(--legend);
+  }
+  .standfirst b { color: #e6e9ec; font-weight: 600; }
+
+  .bay { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); gap: 26px; align-items: start; }
+  @media (max-width: 900px) { .bay { grid-template-columns: 1fr; } }
+
+  /* ---- monitor ---- */
+  .monitor {
+    background: linear-gradient(180deg, var(--case-edge), var(--case) 12%, var(--case-dark));
+    border-radius: 14px 14px 6px 6px;
+    padding: 16px 16px 10px;
+    box-shadow: 0 18px 40px rgba(0,0,0,.45), inset 0 1px 0 rgba(255,255,255,.06);
+  }
+  .tube {
+    background: #000; border-radius: 8px; overflow: hidden;
+    box-shadow: inset 0 0 0 2px #0b0c0d, inset 0 0 44px rgba(0,0,0,.9);
+    line-height: 0;
+  }
+  canvas#screen { width: 100%; height: auto; display: block; image-rendering: pixelated; }
+  .plate {
+    display: flex; align-items: baseline; justify-content: space-between;
+    gap: 12px; margin-top: 10px; padding: 0 2px;
+    font-size: 12px; letter-spacing: .04em; color: var(--legend-dim);
+  }
+  .plate .model { color: var(--legend); font-weight: 600; letter-spacing: .12em; }
+
+  /* ---- controls ---- */
+  .panel { margin-top: 18px; }
+  .keys { display: flex; flex-wrap: wrap; gap: 10px; }
+  button {
+    font: inherit; font-size: 14px; font-weight: 600;
+    color: #12140f; background: linear-gradient(180deg, #d8d6c8, #b9b7a8);
+    border: 0; border-radius: 5px; padding: 9px 16px; cursor: pointer;
+    box-shadow: 0 3px 0 #7d7c70, 0 5px 10px rgba(0,0,0,.35);
+    transition: transform .06s ease, box-shadow .06s ease;
+  }
+  button:active { transform: translateY(3px); box-shadow: 0 0 0 #7d7c70, 0 2px 6px rgba(0,0,0,.35); }
+  button:focus-visible { outline: 3px solid var(--cpc-sky); outline-offset: 2px; }
+  button.primary { color: #1a1400; background: linear-gradient(180deg, #ffe75c, #f0c400); box-shadow: 0 3px 0 #9a7d00, 0 5px 10px rgba(0,0,0,.35); }
+  button.primary:active { box-shadow: 0 0 0 #9a7d00, 0 2px 6px rgba(0,0,0,.35); }
+
+  .readout {
+    margin-top: 16px; display: grid; grid-template-columns: repeat(auto-fit, minmax(112px, 1fr));
+    gap: 1px; background: #101215; border: 1px solid #101215; border-radius: 6px; overflow: hidden;
+  }
+  .readout div { background: #1d2024; padding: 8px 11px; }
+  .readout dt { margin: 0; font-size: 11px; color: var(--legend-dim); letter-spacing: .05em; }
+  .readout dd { margin: 2px 0 0; font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+                font-size: 14px; color: var(--cpc-yellow); }
+  .inks { display: flex; gap: 3px; margin-top: 4px; }
+  .inks span { width: 15px; height: 15px; border-radius: 2px; box-shadow: inset 0 0 0 1px rgba(0,0,0,.5); }
+
+  /* ---- listing ---- */
+  .listing { position: relative; }
+  .listing h2 {
+    margin: 0 0 10px; font-size: 13px; font-weight: 600; letter-spacing: .06em;
+    color: var(--legend-dim);
+  }
+  .fanfold {
+    position: relative; border-radius: 3px; overflow: hidden;
+    border: 1px solid var(--paper-edge);
+    box-shadow: 0 14px 34px rgba(0,0,0,.4);
+    background:
+      repeating-linear-gradient(180deg,
+        var(--paper-bar) 0, var(--paper-bar) 48px,
+        var(--paper) 48px, var(--paper) 96px);
+  }
+  .fanfold::before, .fanfold::after {
+    content: ""; position: absolute; top: 0; bottom: 0; width: 22px;
+    background:
+      radial-gradient(circle at 11px 12px, var(--case-dark) 3.4px, transparent 3.6px) 0 0/22px 24px repeat-y,
+      linear-gradient(180deg, rgba(0,0,0,.05), rgba(0,0,0,.05));
+    border-right: 1px dashed rgba(0,0,0,.16);
+  }
+  .fanfold::before { left: 0; }
+  .fanfold::after { right: 0; border-right: 0; border-left: 1px dashed rgba(0,0,0,.16); }
+  textarea#src {
+    display: block; width: 100%; height: 480px; resize: vertical;
+    padding: 0 30px; margin: 0; border: 0; background: transparent; color: var(--paper-ink);
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, "Courier New", monospace;
+    font-size: 12.5px; line-height: 24px; white-space: pre; overflow: auto;
+    tab-size: 8;
+  }
+  textarea#src:focus { outline: 2px solid var(--cpc-sky); outline-offset: -2px; }
+
+  .errors {
+    margin-top: 12px; padding: 0; list-style: none;
+    font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 12.5px;
+  }
+  .errors li { padding: 6px 10px; background: #2a1416; border-left: 3px solid var(--cpc-red); color: #ffc9c9; margin-bottom: 4px; }
+  .ok { color: #9fd68c; font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 12.5px; margin-top: 12px; }
+
+  /* ---- notes ---- */
+  .notes { margin-top: 40px; max-width: 74ch; }
+  .notes h2 { font-size: 15px; letter-spacing: .04em; color: #e6e9ec; margin: 0 0 8px; }
+  .notes p { margin: 0 0 14px; }
+  .notes dl { display: grid; grid-template-columns: max-content 1fr; gap: 4px 18px; margin: 0; }
+  .notes dt { color: var(--cpc-yellow); font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 13px; }
+  .notes dd { margin: 0; }
+  .notes code { font-family: ui-monospace, Menlo, Consolas, monospace; color: #e6e9ec; }
+
+  @media (prefers-reduced-motion: reduce) { button { transition: none; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <canvas id="wordmark" aria-label="Amstrad CPC 464"></canvas>
+    <p class="standfirst">
+      A 1984 home computer, rebuilt in JavaScript: <b>Z80 processor, Gate Array, 6845 video controller.</b>
+      The demo running on the screen is machine code, assembled from the listing beside it.
+      Change the listing and assemble it again to see what happens.
+    </p>
+  </header>
+
+  <div class="bay">
+    <section>
+      <div class="monitor">
+        <div class="tube"><canvas id="screen" width="736" height="496"></canvas></div>
+        <div class="plate"><span class="model">AMSTRAD CPC 464</span><span>64K &middot; mode 1 &middot; 320 &times; 200</span></div>
+      </div>
+
+      <div class="panel">
+        <div class="keys">
+          <button id="assemble" class="primary">Assemble and run</button>
+          <button id="pause">Pause</button>
+          <button id="reset">Reset</button>
+          <button id="export">Download .sna</button>
+          <button id="restore">Restore listing</button>
+        </div>
+        <dl class="readout">
+          <div><dt>Frame</dt><dd id="r-frame">0</dd></div>
+          <div><dt>Program counter</dt><dd id="r-pc">&amp;0000</dd></div>
+          <div><dt>Screen mode</dt><dd id="r-mode">1</dd></div>
+          <div><dt>Code size</dt><dd id="r-size">0 bytes</dd></div>
+          <div><dt>Inks</dt><dd><div class="inks" id="r-inks"></div></dd></div>
+        </dl>
+      </div>
+    </section>
+
+    <section class="listing">
+      <h2>Program listing &mdash; Z80 assembly</h2>
+      <div class="fanfold"><textarea id="src" spellcheck="false" aria-label="Z80 assembly source"></textarea></div>
+      <ul class="errors" id="errors"></ul>
+      <p class="ok" id="ok"></p>
+    </section>
+  </div>
+
+  <section class="notes">
+    <h2>What the machine is doing</h2>
+    <p>
+      There is no firmware here. The program pages both ROMs out and writes straight to the hardware,
+      which is how demos were actually written.
+    </p>
+    <dl>
+      <dt>&amp;7F00</dt><dd>Gate Array. Picks an ink, sets its colour, and selects the screen mode.</dd>
+      <dt>&amp;F500</dt><dd>PPI port B. Bit 0 goes high during the vertical sync pulse, which is how the program stays at 50Hz.</dd>
+      <dt>&amp;0038</dt><dd>Interrupt vector. The CPC interrupts six times a frame, every 52 scanlines.</dd>
+      <dt>&amp;C000</dt><dd>Screen memory. 16K, and famously not linear: eight interleaved blocks of &amp;800, one per raster line within a character row.</dd>
+    </dl>
+    <p>
+      The colour bands are ink 0 being rewritten twelve times while the CRT is still drawing the picture,
+      three scanlines apart, from inside the interrupt handler. That effect costs exactly what it covers:
+      36 scanlines of screen means 36 scanlines of processor time gone. The rest of the frame has to fit
+      in what is left, which is why the sprites are cheap and the scrolling text runs in a window rather
+      than the full 320 pixels. As written it uses about 280 of the 312 scanlines in a frame.
+    </p>
+    <p>
+      Instructions are charged the way the Gate Array charges them: every one is stretched to a multiple
+      of four T-states, and the interrupt counter is resynchronised two scanlines into the vertical sync
+      pulse. Without both of those, hand-timed raster code lands in the wrong place.
+    </p>
+    <h2>Checking it on another emulator</h2>
+    <p>
+      <b>Download .sna</b> writes a version 2 CPC snapshot: a 256-byte header holding the Z80 registers,
+      the Gate Array palette and mode, the CRTC registers and the PPI state, followed by all 64K of RAM.
+      It is captured at the entry point with both ROMs already paged out, so nothing depends on firmware
+      being present. Drop the file on any of these and it should look the same:
+    </p>
+    <dl>
+      <dt>tiny8bit</dt><dd>Andre Weissflog's WebAssembly CPC at <code>floooh.github.io/tiny8bit/cpc.html</code>. The <code>cpc-ui</code> build adds a Z80 disassembler and memory viewer, which makes it the most useful of the three for finding out why something differs.</dd>
+      <dt>CPCBox</dt><dd>A JavaScript CPC at <code>cpcbox.com</code>, cycle-accurate enough for demo code.</dd>
+      <dt>WinAPE / Caprice32 / RVM</dt><dd>Desktop emulators. WinAPE in particular has a good debugger and is the usual reference for CPC timing.</dd>
+    </dl>
+    <p>
+      Two things will not match. There is no sound here at all, so any PSG registers in the snapshot are
+      zero. And while instruction timing follows the Gate Array's four-cycle rule, it is charged per
+      instruction rather than per machine cycle, so a raster split placed to the exact T-state may drift
+      by a few cycles against a reference emulator.
+    </p>
+    <p>
+      The assembler supports labels, <code>org</code>, <code>equ</code>, <code>db</code>, <code>dw</code>,
+      <code>ds</code>, the full base instruction set, <code>CB</code> shifts and bit operations,
+      <code>ED</code> block moves, and the <code>IX</code> / <code>IY</code> index registers.
+      Numbers can be written <code>&amp;FF</code>, <code>#FF</code>, <code>0xFF</code>, <code>%1010</code> or plain decimal.
+      Execution starts at the label <code>start</code>.
+    </p>
+  </section>
+</div>
+
+<script type="text/x-z80" id="demo-src">; =====================================================================
+;  R A S T E R   S T A T E   O F   M I N D
+;  A demo for the Amstrad CPC 464 -- Z80, mode 1, 320x200, four inks.
+;
+;  No firmware calls: this talks straight to the Gate Array and the PPI,
+;  so it runs on a bare machine with the ROMs paged out.
+; =====================================================================
+
+DELAY     equ 38              ; inner delay, tuned to about three scanlines
+NBANDS    equ 12              ; colour changes per raster block
+GATEARRAY equ &7F00           ; Gate Array: ink select, ink colour, mode
+PPI_B     equ &F500           ; PPI port B: bit 0 is the CRTC VSYNC flag
+SCREEN    equ &C000
+
+NBALLS    equ 3
+BTOP      equ 52              ; sprite field, top scanline
+BHEIGHT   equ 69              ; ...and how many scanlines it spans
+BRIGHT    equ 77              ; rightmost sprite column, in bytes
+SCRY      equ 164             ; top scanline of the scroller strip
+SCRX      equ 14              ; scroller window, left edge in bytes
+SCRW      equ 52              ; ...and its width in bytes (208 pixels)
+SCRLOOP   equ 17              ; (SCRW - 1) / 3: the shift loop does three at a time
+
+          org &4000
+
+; ---------------------------------------------------------------------
+; Set up, then loop forever at 50Hz.
+; ---------------------------------------------------------------------
+start:    di
+          ld sp,&BFF0
+          im 1
+          ld a,&C3                  ; JP irq at the mode-1 vector
+          ld (&0038),a
+          ld hl,irq
+          ld (&0039),hl
+
+          ld bc,GATEARRAY
+          ld a,&8D                  ; both ROMs off, screen mode 1
+          out (c),a
+
+          call cls
+          call setpens
+          call drawheader
+          ei
+
+frame:    call waitvsync
+          ld a,4                    ; re-phase the raster counter
+          ld (barpos),a
+          call eraseballs
+          call moveballs
+          call drawballs
+          call scroller
+          call animate
+          jr frame
+
+; ---------------------------------------------------------------------
+; Interrupt handler. The CPC interrupts every 52 scanlines, six times a
+; frame, so changing ink 0 here paints horizontal bands down the screen.
+; ---------------------------------------------------------------------
+irq:      push af
+          push bc
+          push de
+          push hl
+          ld a,(barpos)
+          inc a
+          cp 6
+          jr c,irq1
+          xor a
+irq1:     ld (barpos),a
+          cp 2
+          jr z,rasters              ; band 2 gets the raster treatment
+          ld c,a                    ; the rest take one flat colour each
+          ld b,0
+          ld hl,flattab
+          add hl,bc
+          ld a,(hl)
+          call setink0
+          jr irqend
+
+; Twelve colour changes, four scanlines apart, painted down the header
+; panel before the next interrupt is due. This is the whole trick: the
+; CRTC is still drawing while the Z80 rewrites ink 0 underneath it.
+rasters:  ld a,(barbase)
+          ld l,a
+          ld h,0
+          ld de,bartab
+          add hl,de
+          ld d,NBANDS
+irq2:     ld a,(hl)
+          call setink0
+          inc hl
+          ld a,DELAY
+irq3:     dec a
+          jr nz,irq3
+          dec d
+          jr nz,irq2
+          ld a,&54                  ; back to black below the block
+          call setink0
+irqend:   pop hl
+          pop de
+          pop bc
+          pop af
+          ei
+          ret
+
+setink0:  ld bc,GATEARRAY           ; A = hardware colour for ink 0 + border
+          ld e,a
+          out (c),c
+          out (c),a
+          ld a,&10
+          out (c),a
+          ld a,e
+          out (c),a
+          ret
+
+; ---------------------------------------------------------------------
+; Wait for the start of the vertical sync pulse.
+; ---------------------------------------------------------------------
+waitvsync:
+          ld bc,PPI_B
+wv1:      in a,(c)
+          rra
+          jr c,wv1                  ; still in sync from last frame
+wv2:      in a,(c)
+          rra
+          jr nc,wv2
+          ret
+
+; ---------------------------------------------------------------------
+; Screen and palette.
+; ---------------------------------------------------------------------
+cls:      ld hl,SCREEN
+          ld de,SCREEN+1
+          ld bc,&3FFF
+          ld (hl),0
+          ldir
+          ret
+
+setpens:  ld hl,pentab
+          ld bc,GATEARRAY
+          ld e,0
+sp1:      out (c),e
+          ld a,(hl)
+          out (c),a
+          inc hl
+          inc e
+          ld a,e
+          cp 4
+          jr c,sp1
+          ld a,&10
+          out (c),a
+          ld a,(hl)
+          out (c),a
+          ret
+
+; HL = screen address of (curx, cury).  curx is in bytes, cury in lines.
+; CPC screen memory is interleaved: eight blocks of &800, one per raster
+; line within a character row.
+scraddr:  ld a,(cury)
+          ld b,a
+          and 7
+          add a,a
+          add a,a
+          add a,a
+          add a,&C0
+          ld h,a
+          ld l,0
+          push hl
+          ld a,b
+          rrca
+          rrca
+          rrca
+          and &1F
+          ld l,a
+          ld h,0
+          add hl,hl
+          add hl,hl
+          add hl,hl
+          add hl,hl                 ; row * 16
+          ld d,h
+          ld e,l
+          add hl,hl
+          add hl,hl                 ; row * 64
+          add hl,de                 ; row * 80
+          ld a,(curx)
+          ld e,a
+          ld d,0
+          add hl,de
+          pop de
+          add hl,de
+          ret
+
+; ---------------------------------------------------------------------
+; Text. Two sizes: 8x8 straight from the font, and the same glyphs with
+; every pixel doubled for the header.
+; ---------------------------------------------------------------------
+; A = font byte -> two mode-1 bytes in buf4.
+expand2:  ld c,a
+          and &F0
+          ld b,a
+          ld a,c
+          rrca
+          rrca
+          rrca
+          rrca
+          and &0F
+          or b
+          ld (buf4),a
+          ld a,c
+          add a,a
+          add a,a
+          add a,a
+          add a,a
+          ld b,a
+          ld a,c
+          and &0F
+          or b
+          ld (buf4+1),a
+          ret
+
+; A = font byte -> four mode-1 bytes in buf4, pixels doubled.
+expand4:  ld (tmpbyte),a
+          rrca
+          rrca
+          rrca
+          rrca
+          and 15
+          add a,a
+          ld l,a
+          ld h,0
+          ld bc,dbltab
+          add hl,bc
+          ld a,(hl)
+          ld (buf4),a
+          inc hl
+          ld a,(hl)
+          ld (buf4+1),a
+          ld a,(tmpbyte)
+          and 15
+          add a,a
+          ld l,a
+          ld h,0
+          ld bc,dbltab
+          add hl,bc
+          ld a,(hl)
+          ld (buf4+2),a
+          inc hl
+          ld a,(hl)
+          ld (buf4+3),a
+          ret
+
+putrow4:  ld a,4                    ; copy buf4 to the screen at curx,cury
+          jr putrow0
+putrow2:  ld a,2
+putrow0:  ld (rowlen),a
+          call scraddr
+          ld de,buf4
+          ld a,(rowlen)
+          ld b,a
+pr1:      ld a,(de)
+          ld c,a
+          ld a,(hl)
+          or c
+          ld (hl),a
+          inc hl
+          inc de
+          djnz pr1
+          ret
+
+nextline: ld hl,cury
+          inc (hl)
+          ret
+
+; HL = HL moved down one scanline. Within a character row that is just
+; +&800; on the eighth line it wraps back and steps on by one row of 80
+; bytes instead. Far cheaper than recomputing the address from scratch.
+nextscan: ld a,h
+          add a,8
+          ld h,a
+          and &38
+          ret nz
+          ld a,l
+          add a,80
+          ld l,a
+          ld a,h
+          adc a,&C0
+          ld h,a
+          ret
+
+; HL = glyph pointer for the character in A.
+glyphof:  sub 32
+          ld l,a
+          ld h,0
+          add hl,hl
+          add hl,hl
+          add hl,hl
+          ld bc,font
+          add hl,bc
+          ret
+
+bigchar:  call glyphof
+          ld (glyphptr),hl
+          ld b,8
+bch1:     push bc
+          ld hl,(glyphptr)
+          ld a,(hl)
+          inc hl
+          ld (glyphptr),hl
+          call expand4
+          call putrow4
+          call nextline
+          call putrow4
+          call nextline
+          pop bc
+          djnz bch1
+          ret
+
+smallchar:
+          call glyphof
+          ld (glyphptr),hl
+          ld b,8
+sch1:     push bc
+          ld hl,(glyphptr)
+          ld a,(hl)
+          inc hl
+          ld (glyphptr),hl
+          call expand2
+          call putrow2
+          call nextline
+          pop bc
+          djnz sch1
+          ret
+
+; HL = zero-terminated string; curx/cury = top-left. A width of 4 bytes
+; per character for the large font, 2 for the small one.
+bigtext:  ld a,1
+          jr text0
+smalltext:
+          xor a
+text0:    ld (bigflag),a
+          ld (strptr),hl
+          ld a,(cury)
+          ld (savey),a
+txt1:     ld hl,(strptr)
+          ld a,(hl)
+          or a
+          ret z
+          inc hl
+          ld (strptr),hl
+          ld c,a
+          ld a,(bigflag)
+          or a
+          ld a,c
+          jr z,txt2
+          call bigchar
+          jr txt3
+txt2:     call smallchar
+txt3:     ld a,(savey)
+          ld (cury),a
+          ld a,(bigflag)
+          or a
+          ld a,2
+          jr z,txt4
+          ld a,4
+txt4:     ld b,a
+          ld a,(curx)
+          add a,b
+          ld (curx),a
+          jr txt1
+
+hline:    ld (tmpbyte),a            ; A = pattern, curx/cury = start, hlcount = length
+          call scraddr
+          ld a,(hlcount)
+          ld b,a
+          ld a,(tmpbyte)
+hl1:      ld (hl),a
+          inc hl
+          djnz hl1
+          ret
+
+fullrule: ld a,0                    ; a rule across the whole screen
+          ld (curx),a
+          ld a,80
+          ld (hlcount),a
+          ret
+
+panelrule:
+          ld a,SCRX                 ; ...and one the width of the message window
+          ld (curx),a
+          ld a,SCRW
+          ld (hlcount),a
+          ret
+
+drawheader:
+          ld a,18
+          ld (curx),a
+          ld a,8
+          ld (cury),a
+          ld hl,title
+          call bigtext
+
+          ld a,7
+          ld (curx),a
+          ld a,32
+          ld (cury),a
+          ld hl,subtitle
+          call smalltext
+
+          call fullrule
+          ld a,46
+          ld (cury),a
+          ld a,&F0
+          call hline
+          call fullrule
+          ld a,47
+          ld (cury),a
+          ld a,&50
+          call hline
+
+          call panelrule
+          ld a,146
+          ld (cury),a
+          ld a,&F0
+          call hline
+          call panelrule
+          ld a,147
+          ld (cury),a
+          ld a,&50
+          call hline
+          call panelrule
+          ld a,188
+          ld (cury),a
+          ld a,&50
+          call hline
+          call panelrule
+          ld a,189
+          ld (cury),a
+          ld a,&F0
+          call hline
+          ret
+
+; ---------------------------------------------------------------------
+; Sprites. Each record is x, y, dx, dy, plane mask. The mask picks which
+; of the two mode-1 bit planes the ball is drawn into, so the same
+; artwork appears in ink 1, 2 or 3.
+; ---------------------------------------------------------------------
+eraseballs:
+          ld ix,balls
+          ld b,NBALLS
+eb0:      push bc
+          call eraseball
+          ld bc,5
+          add ix,bc
+          pop bc
+          djnz eb0
+          ret
+
+drawballs:
+          ld ix,balls
+          ld b,NBALLS
+db0:      push bc
+          call drawball
+          ld bc,5
+          add ix,bc
+          pop bc
+          djnz db0
+          ret
+
+moveballs:
+          ld ix,balls
+          ld b,NBALLS
+mb0:      push bc
+          ld a,(ix+0)
+          add a,(ix+2)
+          cp BRIGHT
+          jr c,mbx
+          ld a,(ix+2)
+          neg
+          ld (ix+2),a
+          ld a,(ix+0)
+          add a,(ix+2)
+mbx:      ld (ix+0),a
+          ld a,(ix+1)
+          add a,(ix+3)
+          ld c,a
+          sub BTOP
+          cp BHEIGHT
+          jr c,mby
+          ld a,(ix+3)
+          neg
+          ld (ix+3),a
+          ld a,(ix+1)
+          add a,(ix+3)
+          ld c,a
+mby:      ld (ix+1),c
+          ld bc,5
+          add ix,bc
+          pop bc
+          djnz mb0
+          ret
+
+setpos:   ld a,(ix+0)
+          ld (curx),a
+          ld a,(ix+1)
+          ld (cury),a
+          ret
+
+drawball: call setpos
+          call scraddr
+          ld de,balldata
+          ld c,(ix+4)               ; plane mask picks the ink
+          ld b,16
+dba1:     push hl
+          ld a,(de)
+          and c
+          or (hl)
+          ld (hl),a
+          inc de
+          inc hl
+          ld a,(de)
+          and c
+          or (hl)
+          ld (hl),a
+          inc de
+          inc hl
+          ld a,(de)
+          and c
+          or (hl)
+          ld (hl),a
+          inc de
+          inc hl
+          ld a,(de)
+          and c
+          or (hl)
+          ld (hl),a
+          inc de
+          pop hl
+          call nextscan
+          djnz dba1
+          ret
+
+eraseball:
+          call setpos
+          call scraddr
+          ld b,16
+eba1:     push hl
+          xor a
+          ld (hl),a
+          inc hl
+          ld (hl),a
+          inc hl
+          ld (hl),a
+          inc hl
+          ld (hl),a
+          pop hl
+          call nextscan
+          djnz eba1
+          ret
+
+; ---------------------------------------------------------------------
+; Scroller. Eight scanlines are shifted two pixels left every frame.
+; In mode 1 the two bit planes are interleaved inside each byte, so a
+; two-pixel shift is (b AND &33) << 2, with the incoming pixels taken
+; from bits 7,6,3,2 of the byte to its right.
+; ---------------------------------------------------------------------
+scroller: ld a,(scrcnt)
+          dec a
+          ld (scrcnt),a
+          jr nz,scr0
+          call loadcol
+scr0:     ld a,SCRY
+          ld (cury),a
+          ld a,SCRX
+          ld (curx),a
+          call scraddr
+          ld iy,offcol
+          ld a,7                    ; the eighth font row is always blank
+          ld (rowcnt),a
+scr1:     push hl
+          ld d,h
+          ld e,l
+          inc de                    ; DE reads one byte ahead of HL
+          ld b,SCRLOOP
+scr2:
+          ld a,(de)
+          and &CC
+          rrca
+          rrca
+          ld c,a
+          ld a,(hl)
+          and &33
+          add a,a
+          add a,a
+          or c
+          ld (hl),a
+          inc hl
+          inc de
+          ld a,(de)
+          and &CC
+          rrca
+          rrca
+          ld c,a
+          ld a,(hl)
+          and &33
+          add a,a
+          add a,a
+          or c
+          ld (hl),a
+          inc hl
+          inc de
+          ld a,(de)
+          and &CC
+          rrca
+          rrca
+          ld c,a
+          ld a,(hl)
+          and &33
+          add a,a
+          add a,a
+          or c
+          ld (hl),a
+          inc hl
+          inc de
+          djnz scr2
+          ld a,(iy+0)               ; the rightmost byte feeds from off screen
+          and &CC
+          rrca
+          rrca
+          ld c,a
+          ld a,(hl)
+          and &33
+          add a,a
+          add a,a
+          or c
+          ld (hl),a
+          ld a,(iy+0)
+          and &33
+          add a,a
+          add a,a
+          ld (iy+0),a
+          inc iy
+          pop hl
+          call nextscan
+          push hl
+          ld hl,rowcnt
+          dec (hl)
+          pop hl
+          jr nz,scr1
+          ret
+
+; Refill the off-screen column with the next half of the next character.
+loadcol:  ld a,2
+          ld (scrcnt),a
+          ld a,(charhalf)
+          or a
+          jr nz,lc0
+          ld hl,(msgptr)
+          ld a,(hl)
+          or a
+          jr nz,lc1
+          ld hl,message
+          ld a,(hl)
+lc1:      inc hl
+          ld (msgptr),hl
+          call glyphof
+          ld (scrglyph),hl
+lc0:      ld hl,(scrglyph)
+          ld de,offcol
+          ld b,8
+lc2:      push bc
+          ld a,(hl)
+          push hl
+          push de
+          call expand2
+          pop de
+          pop hl
+          ld a,(charhalf)
+          or a
+          ld a,(buf4)
+          jr z,lc3
+          ld a,(buf4+1)
+lc3:      ld (de),a
+          inc hl
+          inc de
+          pop bc
+          djnz lc2
+          ld a,(charhalf)
+          xor 1
+          ld (charhalf),a
+          ret
+
+; ---------------------------------------------------------------------
+animate:  ld a,(tick)
+          inc a
+          ld (tick),a
+          and 3
+          ret nz
+          ld a,(barbase)
+          dec a
+          and 15
+          ld (barbase),a
+          ret
+
+; ---------------------------------------------------------------------
+; Data
+; ---------------------------------------------------------------------
+pentab:   db &54,&4C,&5A,&4B,&54    ; inks 0-3 then the border
+
+bartab:   db &54,&44,&58,&5D,&45,&4D,&4C,&4E
+          db &5A,&4E,&4C,&4D,&45,&5D,&58,&44
+          db &54,&44,&58,&5D,&45,&4D,&4C,&4E
+          db &5A,&4E,&4C,&4D,&45,&5D,&58,&44
+          db &54,&44,&58,&5D,&45,&4D,&4C,&4E
+          db &5A,&4E,&4C,&4D,&45,&5D,&58,&44
+
+flattab:  db &54,&54,&54,&44,&44,&54    ; ink 0 for the flat bands
+
+balls:    db  6, 70, 1, 2,&FF
+          db 34, 96,-1, 3,&F0
+          db 60,120, 2,-2,&0F
+
+title:    db "AMSTRAD CPC",0
+subtitle: db "RASTER BARS AND A SPRITE OR THREE",0
+
+message:  db "WELCOME TO A LITTLE PIECE OF 1984. "
+          db "EVERYTHING ON THIS SCREEN IS Z80 MACHINE CODE TALKING TO A GATE ARRAY "
+          db "AND A 6845 CRTC. THE COLOURED BANDS ARE INK 0 BEING CHANGED SIX TIMES "
+          db "A FRAME FROM THE INTERRUPT HANDLER. THE BALLS ARE MASKED INTO ONE OR "
+          db "BOTH BIT PLANES, WHICH IS WHY THEY COME OUT IN DIFFERENT INKS FROM THE "
+          db "SAME SIXTY-FOUR BYTES OF ARTWORK. AND THIS TEXT IS EIGHT SCANLINES OF "
+          db "SCREEN MEMORY BEING SHIFTED TWO PIXELS LEFT, FIFTY TIMES A SECOND. "
+          db "EDIT THE SOURCE, PRESS ASSEMBLE, AND IT ALL RUNS AGAIN.        ",0
+
+barpos:   db 0
+barbase:  db 0
+tick:     db 0
+curx:     db 0
+cury:     db 0
+savey:    db 0
+rowlen:   db 0
+hlcount:  db 0
+rowcnt:   db 0
+bigflag:  db 0
+tmpbyte:  db 0
+charhalf: db 0
+scrcnt:   db 1
+strptr:   dw 0
+glyphptr: dw 0
+scrglyph: dw 0
+msgptr:   dw message
+buf4:     ds 4
+offcol:   ds 8
+
+; 8x8 font, ASCII 32 (" ") to 90 ("Z"), one row per byte
+font:
+  db &00,&00,&00,&00,&00,&00,&00,&00
+  db &30,&30,&30,&30,&30,&00,&30,&00
+  db &00,&00,&00,&00,&00,&00,&00,&00
+  db &00,&00,&00,&00,&00,&00,&00,&00
+  db &00,&00,&00,&00,&00,&00,&00,&00
+  db &00,&00,&00,&00,&00,&00,&00,&00
+  db &00,&00,&00,&00,&00,&00,&00,&00
+  db &30,&30,&20,&00,&00,&00,&00,&00
+  db &18,&30,&60,&60,&60,&30,&18,&00
+  db &60,&30,&18,&18,&18,&30,&60,&00
+  db &00,&28,&10,&7C,&10,&28,&00,&00
+  db &00,&10,&10,&7C,&10,&10,&00,&00
+  db &00,&00,&00,&00,&00,&30,&30,&20
+  db &00,&00,&00,&7C,&00,&00,&00,&00
+  db &00,&00,&00,&00,&00,&30,&30,&00
+  db &06,&0C,&18,&30,&60,&C0,&00,&00
+  db &7C,&C6,&CE,&DE,&F6,&E6,&7C,&00
+  db &18,&38,&18,&18,&18,&18,&7E,&00
+  db &7C,&C6,&06,&1C,&70,&C0,&FE,&00
+  db &7C,&C6,&06,&3C,&06,&C6,&7C,&00
+  db &1C,&3C,&6C,&CC,&FE,&0C,&1E,&00
+  db &FE,&C0,&FC,&06,&06,&C6,&7C,&00
+  db &3C,&60,&C0,&FC,&C6,&C6,&7C,&00
+  db &FE,&C6,&0C,&18,&30,&30,&30,&00
+  db &7C,&C6,&C6,&7C,&C6,&C6,&7C,&00
+  db &7C,&C6,&C6,&7E,&06,&0C,&78,&00
+  db &00,&30,&30,&00,&30,&30,&00,&00
+  db &00,&00,&00,&00,&00,&00,&00,&00
+  db &00,&00,&00,&00,&00,&00,&00,&00
+  db &00,&00,&00,&00,&00,&00,&00,&00
+  db &00,&00,&00,&00,&00,&00,&00,&00
+  db &7C,&C6,&0C,&18,&18,&00,&18,&00
+  db &00,&00,&00,&00,&00,&00,&00,&00
+  db &38,&6C,&C6,&C6,&FE,&C6,&C6,&00
+  db &FC,&C6,&C6,&FC,&C6,&C6,&FC,&00
+  db &3E,&62,&C0,&C0,&C0,&62,&3E,&00
+  db &F8,&66,&63,&63,&63,&66,&F8,&00
+  db &FE,&C0,&C0,&F8,&C0,&C0,&FE,&00
+  db &FE,&C0,&C0,&F8,&C0,&C0,&C0,&00
+  db &3E,&62,&C0,&CF,&C3,&63,&3E,&00
+  db &C6,&C6,&C6,&FE,&C6,&C6,&C6,&00
+  db &7E,&18,&18,&18,&18,&18,&7E,&00
+  db &1F,&06,&06,&06,&C6,&C6,&7C,&00
+  db &C6,&CC,&D8,&F0,&D8,&CC,&C6,&00
+  db &C0,&C0,&C0,&C0,&C0,&C0,&FE,&00
+  db &C6,&EE,&FE,&D6,&C6,&C6,&C6,&00
+  db &C6,&E6,&F6,&DE,&CE,&C6,&C6,&00
+  db &7C,&C6,&C6,&C6,&C6,&C6,&7C,&00
+  db &FC,&C6,&C6,&FC,&C0,&C0,&C0,&00
+  db &7C,&C6,&C6,&C6,&DC,&CC,&76,&00
+  db &FC,&C6,&C6,&FC,&D8,&CC,&C6,&00
+  db &7C,&C6,&C0,&7C,&06,&C6,&7C,&00
+  db &FE,&18,&18,&18,&18,&18,&18,&00
+  db &C6,&C6,&C6,&C6,&C6,&C6,&7C,&00
+  db &C6,&C6,&C6,&C6,&6C,&38,&10,&00
+  db &C6,&C6,&C6,&D6,&FE,&EE,&C6,&00
+  db &C6,&6C,&38,&10,&38,&6C,&C6,&00
+  db &C6,&C6,&6C,&38,&18,&18,&18,&00
+  db &FE,&06,&0C,&18,&30,&60,&FE,&00
+
+; 16x16 ball sprite, mode 1, 4 bytes per row
+balldata:
+  db &00,&11,&88,&00
+  db &00,&FF,&FF,&00
+  db &11,&FF,&FF,&88
+  db &33,&EE,&11,&CC
+  db &77,&EE,&00,&EE
+  db &77,&EE,&00,&66
+  db &77,&EE,&00,&66
+  db &EE,&00,&00,&77
+  db &EE,&00,&00,&77
+  db &66,&00,&00,&66
+  db &66,&00,&00,&66
+  db &77,&00,&00,&EE
+  db &33,&88,&11,&CC
+  db &11,&FF,&FF,&88
+  db &00,&FF,&FF,&00
+  db &00,&11,&88,&00
+
+; nibble -> 2 mode-1 bytes with each pixel doubled
+dbltab:
+  db &00,&00,&00,&33,&00,&CC,&00,&FF
+  db &33,&00,&33,&33,&33,&CC,&33,&FF
+  db &CC,&00,&CC,&33,&CC,&CC,&CC,&FF
+  db &FF,&00,&FF,&33,&FF,&CC,&FF,&FF
+</script>
+<script>// Z80 CPU core. Sufficient subset for CPC demo code:
+// all base opcodes, CB, ED (block ops, IN/OUT, 16-bit ALU), DD/FD (IX/IY).
+function makeZ80(bus) {
+  const SF=0x80, ZF=0x40, YF=0x20, HF=0x10, XF=0x08, PF=0x04, NF=0x02, CF=0x01;
+
+  const parity = new Uint8Array(256);
+  for (let i=0;i<256;i++){ let p=0,v=i; while(v){p^=v&1;v>>=1;} parity[i]=p?0:PF; }
+
+  const cpu = {
+    R: new Uint8Array(8),      // 0=B 1=C 2=D 3=E 4=H 5=L 6=unused 7=A
+    Rs: new Uint8Array(8),     // shadow
+    F: 0, Fs: 0,
+    SP: 0xC000, PC: 0,
+    IX: 0, IY: 0, I: 0, Rr: 0,
+    IFF1: 0, IFF2: 0, IM: 1,
+    halted: false,
+    tstates: 0,
+    reset() {
+      this.R.fill(0); this.Rs.fill(0); this.F=0; this.Fs=0;
+      this.SP=0xC000; this.PC=0; this.IX=0; this.IY=0;
+      this.IFF1=0; this.IFF2=0; this.IM=1; this.halted=false; this.tstates=0;
+    }
+  };
+
+  const R = cpu.R;
+  const rd = a => bus.read(a & 0xFFFF);
+  const wr = (a,v) => bus.write(a & 0xFFFF, v & 0xFF);
+
+  const getHL = () => (R[4]<<8)|R[5];
+  const setHL = v => { R[4]=(v>>8)&0xFF; R[5]=v&0xFF; };
+  const getBC = () => (R[0]<<8)|R[1];
+  const setBC = v => { R[0]=(v>>8)&0xFF; R[1]=v&0xFF; };
+  const getDE = () => (R[2]<<8)|R[3];
+  const setDE = v => { R[2]=(v>>8)&0xFF; R[3]=v&0xFF; };
+
+  function fetch() { const v = rd(cpu.PC); cpu.PC = (cpu.PC+1)&0xFFFF; return v; }
+  function fetch16() { const l = fetch(); return l | (fetch()<<8); }
+
+  function push(v) { cpu.SP=(cpu.SP-1)&0xFFFF; wr(cpu.SP, v>>8); cpu.SP=(cpu.SP-1)&0xFFFF; wr(cpu.SP, v&0xFF); }
+  function pop() { const l = rd(cpu.SP); cpu.SP=(cpu.SP+1)&0xFFFF; const h = rd(cpu.SP); cpu.SP=(cpu.SP+1)&0xFFFF; return l|(h<<8); }
+
+  // --- ALU ---
+  function add8(v, carry) {
+    const a = R[7], r = a + v + carry;
+    let f = (r & 0xFF) ? 0 : ZF;
+    f |= r & (SF|YF|XF);
+    if (r > 0xFF) f |= CF;
+    if (((a ^ v ^ 0x80) & (a ^ r) & 0x80)) f |= PF;
+    if (((a & 0x0F) + (v & 0x0F) + carry) > 0x0F) f |= HF;
+    R[7] = r & 0xFF; cpu.F = f;
+  }
+  function sub8(v, carry, store) {
+    const a = R[7], r = a - v - carry;
+    let f = NF | ((r & 0xFF) ? 0 : ZF);
+    f |= r & (SF|YF|XF);
+    if (r & 0x100) f |= CF;
+    if (((a ^ v) & (a ^ r) & 0x80)) f |= PF;
+    if (((a & 0x0F) - (v & 0x0F) - carry) & 0x10) f |= HF;
+    if (store) R[7] = r & 0xFF;
+    else { f = (f & ~(YF|XF)) | (v & (YF|XF)); }
+    cpu.F = f;
+  }
+  function and8(v){ R[7]&=v; cpu.F = parity[R[7]] | HF | (R[7]?0:ZF) | (R[7]&(SF|YF|XF)); }
+  function or8(v){ R[7]|=v; cpu.F = parity[R[7]] | (R[7]?0:ZF) | (R[7]&(SF|YF|XF)); }
+  function xor8(v){ R[7]^=v; cpu.F = parity[R[7]] | (R[7]?0:ZF) | (R[7]&(SF|YF|XF)); }
+
+  function inc8(v){ const r=(v+1)&0xFF;
+    cpu.F = (cpu.F & CF) | (r?0:ZF) | (r&(SF|YF|XF)) | ((r&0x0F)?0:HF) | (r===0x80?PF:0);
+    return r; }
+  function dec8(v){ const r=(v-1)&0xFF;
+    cpu.F = (cpu.F & CF) | NF | (r?0:ZF) | (r&(SF|YF|XF)) | (((r&0x0F)===0x0F)?HF:0) | (r===0x7F?PF:0);
+    return r; }
+
+  function add16(a,b){ const r=a+b;
+    cpu.F = (cpu.F & (SF|ZF|PF)) | ((r>>8)&(YF|XF)) | (r>0xFFFF?CF:0) | (((a&0xFFF)+(b&0xFFF))>0xFFF?HF:0);
+    return r & 0xFFFF; }
+  function adc16(a,b){ const c=cpu.F&CF, r=a+b+c;
+    let f = ((r&0xFFFF)?0:ZF) | ((r>>8)&(SF|YF|XF)) | (r>0xFFFF?CF:0);
+    if (((a^b^0x8000)&(a^r)&0x8000)) f|=PF;
+    if (((a&0xFFF)+(b&0xFFF)+c)>0xFFF) f|=HF;
+    cpu.F=f; return r & 0xFFFF; }
+  function sbc16(a,b){ const c=cpu.F&CF, r=a-b-c;
+    let f = NF | ((r&0xFFFF)?0:ZF) | ((r>>8)&(SF|YF|XF)) | (r&0x10000?CF:0);
+    if (((a^b)&(a^r)&0x8000)) f|=PF;
+    if (((a&0xFFF)-(b&0xFFF)-c)&0x1000) f|=HF;
+    cpu.F=f; return r & 0xFFFF; }
+
+  // --- rotates/shifts (CB) ---
+  function szp(r){ return parity[r] | (r?0:ZF) | (r&(SF|YF|XF)); }
+  function rlc(v){ const c=(v>>7)&1, r=((v<<1)|c)&0xFF; cpu.F=szp(r)|c; return r; }
+  function rrc(v){ const c=v&1, r=((v>>1)|(c<<7))&0xFF; cpu.F=szp(r)|c; return r; }
+  function rl(v){ const c=(v>>7)&1, r=((v<<1)|(cpu.F&CF))&0xFF; cpu.F=szp(r)|c; return r; }
+  function rr(v){ const c=v&1, r=((v>>1)|((cpu.F&CF)<<7))&0xFF; cpu.F=szp(r)|c; return r; }
+  function sla(v){ const c=(v>>7)&1, r=(v<<1)&0xFF; cpu.F=szp(r)|c; return r; }
+  function sra(v){ const c=v&1, r=((v>>1)|(v&0x80))&0xFF; cpu.F=szp(r)|c; return r; }
+  function sll(v){ const c=(v>>7)&1, r=((v<<1)|1)&0xFF; cpu.F=szp(r)|c; return r; }
+  function srl(v){ const c=v&1, r=(v>>1)&0xFF; cpu.F=szp(r)|c; return r; }
+  function bit(v,b){ const r=v&(1<<b);
+    cpu.F = (cpu.F&CF) | HF | (r?0:(ZF|PF)) | (r&SF) | (v&(YF|XF)); }
+
+  const cond = i => {
+    switch(i){
+      case 0: return !(cpu.F&ZF); case 1: return !!(cpu.F&ZF);
+      case 2: return !(cpu.F&CF); case 3: return !!(cpu.F&CF);
+      case 4: return !(cpu.F&PF); case 5: return !!(cpu.F&PF);
+      case 6: return !(cpu.F&SF); case 7: return !!(cpu.F&SF);
+    }
+  };
+
+  function getR(i){ return i===6 ? rd(getHL()) : R[i]; }
+  function setR(i,v){ if(i===6) wr(getHL(), v); else R[i]=v&0xFF; }
+
+  function rp(i){ return i===0?getBC():i===1?getDE():i===2?getHL():cpu.SP; }
+  function setrp(i,v){ if(i===0)setBC(v); else if(i===1)setDE(v); else if(i===2)setHL(v); else cpu.SP=v&0xFFFF; }
+
+  const aluOp = (i,v) => {
+    switch(i){
+      case 0: add8(v,0); break; case 1: add8(v,cpu.F&CF); break;
+      case 2: sub8(v,0,true); break; case 3: sub8(v,cpu.F&CF,true); break;
+      case 4: and8(v); break; case 5: xor8(v); break;
+      case 6: or8(v); break; case 7: sub8(v,0,false); break;
+    }
+  };
+
+  // --- CB prefix ---
+  function execCB(){
+    const op = fetch(); cpu.tstates += 8;
+    const y=(op>>3)&7, z=op&7, x=op>>6;
+    if (z===6) cpu.tstates += 7;
+    let v = getR(z);
+    if (x===0){
+      const fns=[rlc,rrc,rl,rr,sla,sra,sll,srl];
+      setR(z, fns[y](v));
+    } else if (x===1){ bit(v,y); }
+    else if (x===2){ setR(z, v & ~(1<<y)); }
+    else { setR(z, v | (1<<y)); }
+  }
+
+  // --- ED prefix ---
+  function execED(){
+    const op = fetch(); cpu.tstates += 8;
+    switch(op){
+      case 0x40: case 0x48: case 0x50: case 0x58:
+      case 0x60: case 0x68: case 0x70: case 0x78: { // IN r,(C)
+        const v = bus.in(getBC()); cpu.tstates+=8;
+        const y=(op>>3)&7; if (y!==6) R[y]=v;
+        cpu.F = (cpu.F&CF) | szp(v); break; }
+      case 0x41: case 0x49: case 0x51: case 0x59:
+      case 0x61: case 0x69: case 0x71: case 0x79: { // OUT (C),r
+        const y=(op>>3)&7; bus.out(getBC(), y===6?0:R[y]); cpu.tstates+=8; break; }
+      case 0x42: setHL(sbc16(getHL(), getBC())); cpu.tstates+=7; break;
+      case 0x52: setHL(sbc16(getHL(), getDE())); cpu.tstates+=7; break;
+      case 0x62: setHL(sbc16(getHL(), getHL())); cpu.tstates+=7; break;
+      case 0x72: setHL(sbc16(getHL(), cpu.SP));  cpu.tstates+=7; break;
+      case 0x4A: setHL(adc16(getHL(), getBC())); cpu.tstates+=7; break;
+      case 0x5A: setHL(adc16(getHL(), getDE())); cpu.tstates+=7; break;
+      case 0x6A: setHL(adc16(getHL(), getHL())); cpu.tstates+=7; break;
+      case 0x7A: setHL(adc16(getHL(), cpu.SP));  cpu.tstates+=7; break;
+      case 0x43: case 0x53: case 0x63: case 0x73: { // LD (nn),rp
+        const a=fetch16(), v=rp((op>>4)&3); wr(a,v&0xFF); wr(a+1,v>>8); cpu.tstates+=12; break; }
+      case 0x4B: case 0x5B: case 0x6B: case 0x7B: { // LD rp,(nn)
+        const a=fetch16(); setrp((op>>4)&3, rd(a)|(rd(a+1)<<8)); cpu.tstates+=12; break; }
+      case 0x44: case 0x4C: case 0x54: case 0x5C:
+      case 0x64: case 0x6C: case 0x74: case 0x7C: { // NEG
+        const v=R[7]; R[7]=0; sub8(v,0,true); break; }
+      case 0x45: case 0x55: case 0x5D: case 0x65: case 0x6D: case 0x75: case 0x7D: // RETN
+        cpu.IFF1=cpu.IFF2; cpu.PC=pop(); cpu.tstates+=6; break;
+      case 0x4D: cpu.PC=pop(); cpu.tstates+=6; break; // RETI
+      case 0x46: case 0x4E: case 0x66: case 0x6E: cpu.IM=0; break;
+      case 0x56: case 0x76: cpu.IM=1; break;
+      case 0x5E: case 0x7E: cpu.IM=2; break;
+      case 0x47: cpu.I=R[7]; cpu.tstates+=1; break;
+      case 0x4F: cpu.Rr=R[7]; cpu.tstates+=1; break;
+      case 0x57: R[7]=cpu.I; cpu.F=(cpu.F&CF)|(R[7]?0:ZF)|(R[7]&SF)|(cpu.IFF2?PF:0); cpu.tstates+=1; break;
+      case 0x5F: R[7]=cpu.Rr&0xFF; cpu.F=(cpu.F&CF)|(R[7]?0:ZF)|(R[7]&SF)|(cpu.IFF2?PF:0); cpu.tstates+=1; break;
+      case 0x67: { const a=R[7], m=rd(getHL()); // RRD
+        wr(getHL(), ((m>>4)|(a<<4))&0xFF); R[7]=(a&0xF0)|(m&0x0F);
+        cpu.F=(cpu.F&CF)|szp(R[7]); cpu.tstates+=10; break; }
+      case 0x6F: { const a=R[7], m=rd(getHL()); // RLD
+        wr(getHL(), ((m<<4)|(a&0x0F))&0xFF); R[7]=(a&0xF0)|(m>>4);
+        cpu.F=(cpu.F&CF)|szp(R[7]); cpu.tstates+=10; break; }
+      case 0xA0: case 0xA8: case 0xB0: case 0xB8: { // LDI/LDD/LDIR/LDDR
+        const dir = (op&8)?-1:1;
+        const v = rd(getHL()); wr(getDE(), v);
+        setHL((getHL()+dir)&0xFFFF); setDE((getDE()+dir)&0xFFFF);
+        setBC((getBC()-1)&0xFFFF);
+        const n=(v+R[7])&0xFF;
+        cpu.F = (cpu.F&(SF|ZF|CF)) | (getBC()?PF:0) | (n&XF) | ((n&2)?YF:0);
+        cpu.tstates += 8;
+        if ((op&0x10) && getBC()) { cpu.PC=(cpu.PC-2)&0xFFFF; cpu.tstates+=5; }
+        break; }
+      case 0xA1: case 0xA9: case 0xB1: case 0xB9: { // CPI/CPD/CPIR/CPDR
+        const dir=(op&8)?-1:1, v=rd(getHL()), c=cpu.F&CF;
+        sub8(v,0,false); cpu.F=(cpu.F&~CF)|c;
+        setHL((getHL()+dir)&0xFFFF); setBC((getBC()-1)&0xFFFF);
+        cpu.F=(cpu.F&~PF)|(getBC()?PF:0);
+        cpu.tstates+=8;
+        if ((op&0x10) && getBC() && !(cpu.F&ZF)) { cpu.PC=(cpu.PC-2)&0xFFFF; cpu.tstates+=5; }
+        break; }
+      case 0xA3: case 0xAB: case 0xB3: case 0xBB: { // OUTI/OUTD/OTIR/OTDR
+        const dir=(op&8)?-1:1;
+        R[0]=(R[0]-1)&0xFF;
+        const v=rd(getHL()); bus.out(getBC(), v);
+        setHL((getHL()+dir)&0xFFFF);
+        cpu.F = NF | (R[0]?0:ZF) | (R[0]&(SF|YF|XF));
+        cpu.tstates+=8;
+        if ((op&0x10) && R[0]) { cpu.PC=(cpu.PC-2)&0xFFFF; cpu.tstates+=5; }
+        break; }
+      case 0xA2: case 0xAA: case 0xB2: case 0xBA: { // INI/IND/INIR/INDR
+        const dir=(op&8)?-1:1;
+        const v=bus.in(getBC()); wr(getHL(), v);
+        R[0]=(R[0]-1)&0xFF;
+        setHL((getHL()+dir)&0xFFFF);
+        cpu.F = NF | (R[0]?0:ZF) | (R[0]&(SF|YF|XF));
+        cpu.tstates+=8;
+        if ((op&0x10) && R[0]) { cpu.PC=(cpu.PC-2)&0xFFFF; cpu.tstates+=5; }
+        break; }
+      default: break; // NOP-like
+    }
+  }
+
+  // --- DD/FD prefix (IX/IY) ---
+  function execIdx(isIY){
+    const op = fetch(); cpu.tstates += 4;
+    const get = () => isIY ? cpu.IY : cpu.IX;
+    const set = v => { if (isIY) cpu.IY = v & 0xFFFF; else cpu.IX = v & 0xFFFF; };
+    const idxH = () => (get()>>8)&0xFF, idxL = () => get()&0xFF;
+    const setH = v => set((get()&0x00FF)|((v&0xFF)<<8));
+    const setL = v => set((get()&0xFF00)|(v&0xFF));
+    const disp = () => { let d = fetch(); if (d>127) d-=256; return (get()+d)&0xFFFF; };
+
+    switch(op){
+      case 0x21: set(fetch16()); cpu.tstates+=10; break;
+      case 0x22: { const a=fetch16(); wr(a,idxL()); wr(a+1,idxH()); cpu.tstates+=16; break; }
+      case 0x2A: { const a=fetch16(); set(rd(a)|(rd(a+1)<<8)); cpu.tstates+=16; break; }
+      case 0x23: set(get()+1); cpu.tstates+=6; break;
+      case 0x2B: set(get()-1); cpu.tstates+=6; break;
+      case 0x09: set(add16(get(), getBC())); cpu.tstates+=11; break;
+      case 0x19: set(add16(get(), getDE())); cpu.tstates+=11; break;
+      case 0x29: set(add16(get(), get()));   cpu.tstates+=11; break;
+      case 0x39: set(add16(get(), cpu.SP));  cpu.tstates+=11; break;
+      case 0xE5: push(get()); cpu.tstates+=11; break;
+      case 0xE1: set(pop()); cpu.tstates+=10; break;
+      case 0xE3: { const t=pop(); push(get()); set(t); cpu.tstates+=19; break; }
+      case 0xE9: cpu.PC=get(); cpu.tstates+=4; break;
+      case 0xF9: cpu.SP=get(); cpu.tstates+=6; break;
+      case 0x24: setH(inc8(idxH())); cpu.tstates+=4; break;
+      case 0x25: setH(dec8(idxH())); cpu.tstates+=4; break;
+      case 0x2C: setL(inc8(idxL())); cpu.tstates+=4; break;
+      case 0x2D: setL(dec8(idxL())); cpu.tstates+=4; break;
+      case 0x26: setH(fetch()); cpu.tstates+=7; break;
+      case 0x2E: setL(fetch()); cpu.tstates+=7; break;
+      case 0x34: { const a=disp(); wr(a, inc8(rd(a))); cpu.tstates+=19; break; }
+      case 0x35: { const a=disp(); wr(a, dec8(rd(a))); cpu.tstates+=19; break; }
+      case 0x36: { const a=disp(), v=fetch(); wr(a,v); cpu.tstates+=15; break; }
+      case 0xCB: { // DDCB
+        let d=fetch(); if(d>127)d-=256;
+        const a=(get()+d)&0xFFFF, sub=fetch();
+        const y=(sub>>3)&7, z=sub&7, x=sub>>6;
+        let v=rd(a);
+        if (x===0){ const fns=[rlc,rrc,rl,rr,sla,sra,sll,srl]; v=fns[y](v); wr(a,v); if(z!==6)R[z]=v; }
+        else if (x===1){ bit(v,y); }
+        else if (x===2){ v=v&~(1<<y); wr(a,v); if(z!==6)R[z]=v; }
+        else { v=v|(1<<y); wr(a,v); if(z!==6)R[z]=v; }
+        cpu.tstates+=15; break; }
+      default: {
+        const y=(op>>3)&7, z=op&7, x=op>>6;
+        if (x===1) { // LD r,r'
+          if (z===6 && y!==6) { R[y]=rd(disp()); cpu.tstates+=15; }
+          else if (y===6 && z!==6) { wr(disp(), R[z]); cpu.tstates+=15; }
+          else if (y===4) { if(z===4) {} else if(z===5) setH(idxL()); else setH(R[z]); cpu.tstates+=4; }
+          else if (y===5) { if(z===5) {} else if(z===4) setL(idxH()); else setL(R[z]); cpu.tstates+=4; }
+          else if (z===4) { R[y]=idxH(); cpu.tstates+=4; }
+          else if (z===5) { R[y]=idxL(); cpu.tstates+=4; }
+          else { R[y]=R[z]; cpu.tstates+=4; }
+        } else if (x===2) { // ALU
+          if (z===6) { aluOp(y, rd(disp())); cpu.tstates+=15; }
+          else if (z===4) { aluOp(y, idxH()); cpu.tstates+=4; }
+          else if (z===5) { aluOp(y, idxL()); cpu.tstates+=4; }
+          else { aluOp(y, R[z]); cpu.tstates+=4; }
+        } else {
+          cpu.PC=(cpu.PC-1)&0xFFFF; // treat as plain opcode
+          step();
+        }
+      }
+    }
+  }
+
+  function step() {
+    if (cpu.halted) { cpu.tstates += 4; return 4; }
+    const t0 = cpu.tstates;
+    const op = fetch();
+    cpu.Rr = (cpu.Rr & 0x80) | ((cpu.Rr+1) & 0x7F);
+    const x = op>>6, y = (op>>3)&7, z = op&7, p = (op>>4)&3, q = (op>>3)&1;
+
+    switch (x) {
+      case 1:
+        if (op === 0x76) { cpu.halted = true; cpu.tstates+=4; break; }
+        cpu.tstates += (y===6||z===6) ? 7 : 4;
+        setR(y, getR(z));
+        break;
+      case 2:
+        cpu.tstates += (z===6) ? 7 : 4;
+        aluOp(y, getR(z));
+        break;
+      case 0:
+        switch (z) {
+          case 0:
+            if (y===0) { cpu.tstates+=4; }
+            else if (y===1) { const a=R[7],f=cpu.F; R[7]=cpu.Rs[7]; cpu.Rs[7]=a; cpu.F=cpu.Fs; cpu.Fs=f; cpu.tstates+=4; }
+            else if (y===2) { let d=fetch(); if(d>127)d-=256;
+              R[0]=(R[0]-1)&0xFF;
+              if (R[0]) { cpu.PC=(cpu.PC+d)&0xFFFF; cpu.tstates+=13; } else cpu.tstates+=8; }
+            else if (y===3) { let d=fetch(); if(d>127)d-=256; cpu.PC=(cpu.PC+d)&0xFFFF; cpu.tstates+=12; }
+            else { let d=fetch(); if(d>127)d-=256;
+              if (cond(y-4)) { cpu.PC=(cpu.PC+d)&0xFFFF; cpu.tstates+=12; } else cpu.tstates+=7; }
+            break;
+          case 1:
+            if (q===0) { setrp(p, fetch16()); cpu.tstates+=10; }
+            else { setHL(add16(getHL(), rp(p))); cpu.tstates+=11; }
+            break;
+          case 2:
+            if (q===0) {
+              if (p===0) { wr(getBC(), R[7]); cpu.tstates+=7; }
+              else if (p===1) { wr(getDE(), R[7]); cpu.tstates+=7; }
+              else if (p===2) { const a=fetch16(); wr(a,R[5]); wr(a+1,R[4]); cpu.tstates+=16; }
+              else { const a=fetch16(); wr(a,R[7]); cpu.tstates+=13; }
+            } else {
+              if (p===0) { R[7]=rd(getBC()); cpu.tstates+=7; }
+              else if (p===1) { R[7]=rd(getDE()); cpu.tstates+=7; }
+              else if (p===2) { const a=fetch16(); R[5]=rd(a); R[4]=rd(a+1); cpu.tstates+=16; }
+              else { const a=fetch16(); R[7]=rd(a); cpu.tstates+=13; }
+            }
+            break;
+          case 3:
+            setrp(p, rp(p) + (q?-1:1)); cpu.tstates+=6; break;
+          case 4: cpu.tstates += (y===6)?11:4; setR(y, inc8(getR(y))); break;
+          case 5: cpu.tstates += (y===6)?11:4; setR(y, dec8(getR(y))); break;
+          case 6: cpu.tstates += (y===6)?10:7; setR(y, fetch()); break;
+          case 7:
+            cpu.tstates += 4;
+            if (y===0) { const c=(R[7]>>7)&1; R[7]=((R[7]<<1)|c)&0xFF; cpu.F=(cpu.F&(SF|ZF|PF))|c|(R[7]&(YF|XF)); }
+            else if (y===1) { const c=R[7]&1; R[7]=((R[7]>>1)|(c<<7))&0xFF; cpu.F=(cpu.F&(SF|ZF|PF))|c|(R[7]&(YF|XF)); }
+            else if (y===2) { const c=(R[7]>>7)&1; R[7]=((R[7]<<1)|(cpu.F&CF))&0xFF; cpu.F=(cpu.F&(SF|ZF|PF))|c|(R[7]&(YF|XF)); }
+            else if (y===3) { const c=R[7]&1; R[7]=((R[7]>>1)|((cpu.F&CF)<<7))&0xFF; cpu.F=(cpu.F&(SF|ZF|PF))|c|(R[7]&(YF|XF)); }
+            else if (y===4) { // DAA
+              let a=R[7], adj=0, c=cpu.F&CF;
+              if ((cpu.F&HF) || (a&0x0F)>9) adj|=6;
+              if (c || a>0x99) { adj|=0x60; c=1; }
+              if (cpu.F&NF) { const h=((a&0x0F)-(adj&0x0F))&0x10?HF:0; a=(a-adj)&0xFF; cpu.F=(cpu.F&NF)|h; }
+              else { const h=(((a&0x0F)+(adj&0x0F))>0x0F)?HF:0; a=(a+adj)&0xFF; cpu.F=(cpu.F&NF)|h; }
+              R[7]=a; cpu.F |= parity[a] | (a?0:ZF) | (a&(SF|YF|XF)) | c;
+            }
+            else if (y===5) { R[7]=(~R[7])&0xFF; cpu.F=(cpu.F&(SF|ZF|PF|CF))|HF|NF|(R[7]&(YF|XF)); }
+            else if (y===6) { cpu.F=(cpu.F&(SF|ZF|PF))|CF|(R[7]&(YF|XF)); }
+            else { const c=cpu.F&CF; cpu.F=(cpu.F&(SF|ZF|PF))|(c?HF:0)|(c?0:CF)|(R[7]&(YF|XF)); }
+            break;
+        }
+        break;
+      case 3:
+        switch (z) {
+          case 0: if (cond(y)) { cpu.PC=pop(); cpu.tstates+=11; } else cpu.tstates+=5; break;
+          case 1:
+            if (q===0) { const v=pop();
+              if (p===3) { R[7]=v>>8; cpu.F=v&0xFF; } else setrp(p, v);
+              cpu.tstates+=10; }
+            else {
+              if (p===0) { cpu.PC=pop(); cpu.tstates+=10; }
+              else if (p===1) { for(let i=0;i<6;i++){ if(i===6)continue; const t=R[i]; R[i]=cpu.Rs[i]; cpu.Rs[i]=t; } cpu.tstates+=4; }
+              else if (p===2) { cpu.PC=getHL(); cpu.tstates+=4; }
+              else { cpu.SP=getHL(); cpu.tstates+=6; }
+            }
+            break;
+          case 2: { const a=fetch16(); if (cond(y)) cpu.PC=a; cpu.tstates+=10; break; }
+          case 3:
+            if (y===0) { cpu.PC=fetch16(); cpu.tstates+=10; }
+            else if (y===1) { execCB(); }
+            else if (y===2) { const port=fetch(); bus.out((R[7]<<8)|port, R[7]); cpu.tstates+=15; }
+            else if (y===3) { const port=fetch(); R[7]=bus.in((R[7]<<8)|port); cpu.tstates+=15; }
+            else if (y===4) { const t=pop(); push(getHL()); setHL(t); cpu.tstates+=19; }
+            else if (y===5) { const t=getDE(); setDE(getHL()); setHL(t); cpu.tstates+=4; }
+            else if (y===6) { cpu.IFF1=cpu.IFF2=0; cpu.tstates+=4; }
+            else { cpu.IFF1=cpu.IFF2=1; cpu.tstates+=4; }
+            break;
+          case 4: { const a=fetch16();
+            if (cond(y)) { push(cpu.PC); cpu.PC=a; cpu.tstates+=17; } else cpu.tstates+=10; break; }
+          case 5:
+            if (q===0) { push(p===3 ? ((R[7]<<8)|cpu.F) : rp(p)); cpu.tstates+=11; }
+            else {
+              if (p===0) { const a=fetch16(); push(cpu.PC); cpu.PC=a; cpu.tstates+=17; }
+              else if (p===1) { execIdx(false); }
+              else if (p===2) { execED(); }
+              else { execIdx(true); }
+            }
+            break;
+          case 6: aluOp(y, fetch()); cpu.tstates+=7; break;
+          case 7: push(cpu.PC); cpu.PC = y*8; cpu.tstates+=11; break;
+        }
+        break;
+    }
+    // On the CPC the Gate Array steals a cycle from any machine cycle that is
+    // not already a multiple of four, so every instruction ends up padded to a
+    // multiple of 4 T-states. This is what makes hand-timed raster code work.
+    const rounded = ((cpu.tstates - t0) + 3) & ~3;
+    cpu.tstates = t0 + rounded;
+    return rounded;
+  }
+
+  cpu.step = step;
+  cpu.interrupt = function() {
+    if (!cpu.IFF1) return 0;
+    if (cpu.halted) { cpu.halted = false; cpu.PC = (cpu.PC+1)&0xFFFF; }
+    cpu.IFF1 = cpu.IFF2 = 0;
+    if (cpu.IM === 2) {
+      const v = (cpu.I<<8) | 0xFF;
+      push(cpu.PC); cpu.PC = rd(v) | (rd(v+1)<<8);
+      cpu.tstates += 20; return 20;
+    }
+    push(cpu.PC); cpu.PC = 0x38; cpu.tstates += 16; return 16;
+  };
+  cpu.getHL = getHL; cpu.getBC = getBC; cpu.getDE = getDE;
+  return cpu;
+}
+if (typeof module !== 'undefined') module.exports = { makeZ80 };
+</script>
+<script>// Small two-pass Z80 assembler.
+// Syntax: labels end with ':' (optional), &FF / #FF / 0xFF hex, %1010 binary,
+// directives: ORG, EQU, DB/DEFB/BYTE, DW/DEFW/WORD, DS/DEFS, ALIGN, INCBIN-free.
+function assemble(source) {
+  const R8 = { B:0, C:1, D:2, E:3, H:4, L:5, '(HL)':6, A:7 };
+  const RP  = { BC:0, DE:1, HL:2, SP:3 };
+  const RP2 = { BC:0, DE:1, HL:2, AF:3 };
+  const CC  = { NZ:0, Z:1, NC:2, C:3, PO:4, PE:5, P:6, M:7 };
+  const ALU = { ADD:0, ADC:1, SUB:2, SBC:3, AND:4, XOR:5, OR:6, CP:7 };
+  const CBOPS = { RLC:0, RRC:1, RL:2, RR:3, SLA:4, SRA:5, SLL:6, SRL:7 };
+
+  const out = new Uint8Array(0x10000);
+  const used = new Uint8Array(0x10000);
+  const symbols = Object.create(null);
+  const errors = [];
+  const listing = [];
+  let pc = 0, minAddr = 0x10000, maxAddr = 0, pass = 1, lineNo = 0;
+
+  // ---------- expressions ----------
+  function tokenizeExpr(s) {
+    const t = []; let i = 0;
+    while (i < s.length) {
+      const c = s[i];
+      if (/\s/.test(c)) { i++; continue; }
+      if (c === '&' || c === '#') { let j=i+1, h=''; while (j<s.length && /[0-9a-fA-F]/.test(s[j])) h+=s[j++];
+        if (!h) { t.push({t:'op',v:c}); i++; continue; } t.push({t:'num',v:parseInt(h,16)}); i=j; continue; }
+      if (c === '%' && /[01]/.test(s[i+1]||'')) { let j=i+1,b=''; while(j<s.length && /[01]/.test(s[j])) b+=s[j++];
+        t.push({t:'num',v:parseInt(b,2)}); i=j; continue; }
+      if (/[0-9]/.test(c)) {
+        let j=i, n='';
+        if (c==='0' && (s[i+1]==='x'||s[i+1]==='X')) { j=i+2; let h=''; while(j<s.length&&/[0-9a-fA-F]/.test(s[j]))h+=s[j++];
+          t.push({t:'num',v:parseInt(h,16)}); i=j; continue; }
+        while (j<s.length && /[0-9a-fA-F]/.test(s[j])) n+=s[j++];
+        if (s[j]==='h'||s[j]==='H') { t.push({t:'num',v:parseInt(n,16)}); i=j+1; continue; }
+        t.push({t:'num',v:parseInt(n,10)}); i=j; continue;
+      }
+      if (c === "'" || c === '"') { const q=c; let j=i+1;
+        if (s[j+1]===q) { t.push({t:'num',v:s.charCodeAt(j)}); i=j+2; continue; }
+        t.push({t:'num',v:s.charCodeAt(j)}); i=j+2; continue; }
+      if (/[A-Za-z_.@]/.test(c)) { let j=i,n=''; while(j<s.length && /[A-Za-z0-9_.@]/.test(s[j])) n+=s[j++];
+        t.push({t:'id',v:n}); i=j; continue; }
+      if (c==='$') { t.push({t:'num',v:pc}); i++; continue; }
+      if (s.startsWith('<<',i) || s.startsWith('>>',i)) { t.push({t:'op',v:s.substr(i,2)}); i+=2; continue; }
+      t.push({t:'op',v:c}); i++;
+    }
+    return t;
+  }
+  function evalExpr(str) {
+    const tk = tokenizeExpr(str); let p = 0;
+    const peek = () => tk[p];
+    function primary() {
+      const x = tk[p];
+      if (!x) throw new Error('unexpected end of expression');
+      if (x.t==='num') { p++; return x.v; }
+      if (x.t==='id') { p++;
+        const key = x.v.toUpperCase();
+        if (key in symbols) return symbols[key];
+        if (pass===1) return 0;
+        throw new Error('unknown symbol "'+x.v+'"');
+      }
+      if (x.t==='op' && x.v==='(') { p++; const v=expr(); if (!peek()||peek().v!==')') throw new Error('missing )'); p++; return v; }
+      if (x.t==='op' && (x.v==='-'||x.v==='+'||x.v==='~')) { p++; const v=primary(); return x.v==='-'?-v:x.v==='~'?~v:v; }
+      throw new Error('bad token "'+x.v+'"');
+    }
+    function mul(){ let v=primary(); while(peek()&&peek().t==='op'&&'*/%'.includes(peek().v)){ const o=tk[p++].v; const r=primary();
+      v = o==='*'?v*r : o==='/'?Math.floor(v/r) : v%r; } return v; }
+    function add(){ let v=mul(); while(peek()&&peek().t==='op'&&(peek().v==='+'||peek().v==='-')){ const o=tk[p++].v; const r=mul(); v = o==='+'?v+r:v-r; } return v; }
+    function shift(){ let v=add(); while(peek()&&peek().t==='op'&&(peek().v==='<<'||peek().v==='>>')){ const o=tk[p++].v; const r=add(); v = o==='<<'?v<<r:v>>r; } return v; }
+    function expr(){ let v=shift(); while(peek()&&peek().t==='op'&&'&|^'.includes(peek().v)){ const o=tk[p++].v; const r=shift();
+      v = o==='&'?(v&r) : o==='|'?(v|r) : (v^r); } return v; }
+    const v = expr();
+    if (p < tk.length) throw new Error('trailing "'+tk[p].v+'" in expression');
+    return v|0;
+  }
+
+  // ---------- emit ----------
+  function emit(...bytes) {
+    for (const b of bytes) {
+      if (pc > 0xFFFF) throw new Error('address overflow');
+      if (pass===2) { out[pc] = b & 0xFF; used[pc] = 1; }
+      if (pc < minAddr) minAddr = pc;
+      pc++;
+      if (pc > maxAddr) maxAddr = pc;
+    }
+  }
+  const emitW = v => emit(v & 0xFF, (v>>8) & 0xFF);
+  function rel(target) {
+    const d = target - (pc + 1);
+    if (pass===2 && (d < -128 || d > 127)) throw new Error('relative jump out of range ('+d+')');
+    return d & 0xFF;
+  }
+  function chk8(v){ if (pass===2 && (v < -128 || v > 255)) throw new Error('value '+v+' does not fit in a byte'); return v & 0xFF; }
+
+  // ---------- operand classification ----------
+  function idxOf(o) { // returns {reg:'IX'|'IY', disp:string} or null
+    const m = /^\(\s*(IX|IY)\s*([+-][^)]*)?\)$/i.exec(o);
+    if (!m) return null;
+    return { reg: m[1].toUpperCase(), disp: m[2] ? m[2] : '0' };
+  }
+  const pre = r => r === 'IX' ? 0xDD : 0xFD;
+  function reg8(o) {
+    const u = o.toUpperCase().replace(/\s+/g,'');
+    if (u in R8) return R8[u];
+    if (u === '(HL)') return 6;
+    return -1;
+  }
+  function idxHalf(o) { // IXH etc
+    const m = /^(IX|IY)(H|L)$/i.exec(o.trim());
+    if (!m) return null;
+    return { reg: m[1].toUpperCase(), half: m[2].toUpperCase() === 'H' ? 4 : 5 };
+  }
+  const isMem = o => /^\(.*\)$/.test(o.trim());
+  const inner = o => o.trim().slice(1,-1).trim();
+
+  // ---------- one instruction ----------
+  function doInstruction(mn, ops) {
+    const M = mn.toUpperCase();
+    const A = ops.map(s => s.trim());
+    const a0 = A[0] || '', a1 = A[1] || '';
+    const U0 = a0.toUpperCase().replace(/\s+/g,''), U1 = a1.toUpperCase().replace(/\s+/g,'');
+
+    switch (M) {
+      case 'NOP': return emit(0x00);
+      case 'HALT': return emit(0x76);
+      case 'DI': return emit(0xF3);
+      case 'EI': return emit(0xFB);
+      case 'EXX': return emit(0xD9);
+      case 'RLCA': return emit(0x07);
+      case 'RRCA': return emit(0x0F);
+      case 'RLA': return emit(0x17);
+      case 'RRA': return emit(0x1F);
+      case 'DAA': return emit(0x27);
+      case 'CPL': return emit(0x2F);
+      case 'SCF': return emit(0x37);
+      case 'CCF': return emit(0x3F);
+      case 'NEG': return emit(0xED, 0x44);
+      case 'RETN': return emit(0xED, 0x45);
+      case 'RETI': return emit(0xED, 0x4D);
+      case 'RRD': return emit(0xED, 0x67);
+      case 'RLD': return emit(0xED, 0x6F);
+      case 'LDI': return emit(0xED, 0xA0);
+      case 'LDD': return emit(0xED, 0xA8);
+      case 'LDIR': return emit(0xED, 0xB0);
+      case 'LDDR': return emit(0xED, 0xB8);
+      case 'CPI': return emit(0xED, 0xA1);
+      case 'CPIR': return emit(0xED, 0xB1);
+      case 'CPD': return emit(0xED, 0xA9);
+      case 'CPDR': return emit(0xED, 0xB9);
+      case 'INI': return emit(0xED, 0xA2);
+      case 'INIR': return emit(0xED, 0xB2);
+      case 'OUTI': return emit(0xED, 0xA3);
+      case 'OTIR': return emit(0xED, 0xB3);
+      case 'OUTD': return emit(0xED, 0xAB);
+      case 'OTDR': return emit(0xED, 0xBB);
+
+      case 'IM': {
+        const v = evalExpr(a0);
+        return emit(0xED, v===0?0x46 : v===1?0x56 : 0x5E);
+      }
+
+      case 'EX': {
+        if (U0==='DE' && U1==='HL') return emit(0xEB);
+        if (U0==='AF' && (U1==="AF'"||U1==='AF')) return emit(0x08);
+        if (U0==='(SP)') {
+          if (U1==='HL') return emit(0xE3);
+          if (U1==='IX'||U1==='IY') return emit(pre(U1), 0xE3);
+        }
+        throw new Error('bad operands for EX');
+      }
+
+      case 'PUSH': case 'POP': {
+        const base = M==='PUSH' ? 0xC5 : 0xC1;
+        if (U0==='IX'||U0==='IY') return emit(pre(U0), base);
+        if (U0 in RP2) return emit(base | (RP2[U0]<<4));
+        throw new Error('bad operand for '+M);
+      }
+
+      case 'RST': { const v = evalExpr(a0);
+        if (v & ~0x38) throw new Error('bad RST target');
+        return emit(0xC7 | v); }
+
+      case 'RET':
+        if (!a0) return emit(0xC9);
+        if (U0 in CC) return emit(0xC0 | (CC[U0]<<3));
+        throw new Error('bad condition for RET');
+
+      case 'JP':
+        if (A.length===1) {
+          if (U0==='(HL)') return emit(0xE9);
+          if (U0==='(IX)'||U0==='(IY)') return emit(pre(U0.slice(1,3)), 0xE9);
+          return emit(0xC3), emitW(evalExpr(a0));
+        }
+        if (U0 in CC) { emit(0xC2 | (CC[U0]<<3)); return emitW(evalExpr(a1)); }
+        throw new Error('bad condition for JP');
+
+      case 'CALL':
+        if (A.length===1) { emit(0xCD); return emitW(evalExpr(a0)); }
+        if (U0 in CC) { emit(0xC4 | (CC[U0]<<3)); return emitW(evalExpr(a1)); }
+        throw new Error('bad condition for CALL');
+
+      case 'DJNZ': { emit(0x10); return emit(rel(evalExpr(a0))); }
+
+      case 'JR': {
+        if (A.length===1) { emit(0x18); return emit(rel(evalExpr(a0))); }
+        const c = { NZ:0, Z:1, NC:2, C:3 }[U0];
+        if (c === undefined) throw new Error('JR only supports NZ, Z, NC, C');
+        emit(0x20 | (c<<3)); return emit(rel(evalExpr(a1)));
+      }
+
+      case 'IN': {
+        if (U1==='(C)') { const r = U0==='F' ? 6 : reg8(a0);
+          if (r<0||r===6&&U0!=='F') throw new Error('bad register for IN');
+          return emit(0xED, 0x40 | (r<<3)); }
+        if (U0==='A' && isMem(a1)) { emit(0xDB); return emit(chk8(evalExpr(inner(a1)))); }
+        throw new Error('bad operands for IN');
+      }
+      case 'OUT': {
+        if (U0==='(C)') { const r = (U1==='0') ? 6 : reg8(a1);
+          if (r<0) throw new Error('bad register for OUT');
+          return emit(0xED, 0x41 | (r<<3)); }
+        if (isMem(a0) && U1==='A') { emit(0xD3); return emit(chk8(evalExpr(inner(a0)))); }
+        throw new Error('bad operands for OUT');
+      }
+
+      case 'INC': case 'DEC': {
+        const isInc = M==='INC';
+        if (U0==='IX'||U0==='IY') return emit(pre(U0), isInc?0x23:0x2B);
+        if (U0 in RP) return emit((RP[U0]<<4) | (isInc?0x03:0x0B));
+        const ih = idxHalf(a0);
+        if (ih) return emit(pre(ih.reg), (ih.half<<3) | (isInc?0x04:0x05));
+        const ix = idxOf(a0);
+        if (ix) { emit(pre(ix.reg), isInc?0x34:0x35); return emit(chk8(evalExpr(ix.disp))); }
+        const r = reg8(a0);
+        if (r>=0) return emit((r<<3) | (isInc?0x04:0x05));
+        throw new Error('bad operand for '+M);
+      }
+
+      case 'ADD': case 'ADC': case 'SBC': case 'SUB': case 'AND':
+      case 'OR': case 'XOR': case 'CP': {
+        let dst = a0, src = a1;
+        if (A.length===1) { dst='A'; src=a0; }
+        const D = dst.toUpperCase().replace(/\s+/g,'');
+        const S = src.toUpperCase().replace(/\s+/g,'');
+        if (D==='HL' && (M==='ADD'||M==='ADC'||M==='SBC')) {
+          if (!(S in RP)) throw new Error('bad 16-bit operand');
+          if (M==='ADD') return emit(0x09 | (RP[S]<<4));
+          return emit(0xED, (M==='ADC'?0x4A:0x42) | (RP[S]<<4));
+        }
+        if ((D==='IX'||D==='IY') && M==='ADD') {
+          let sp = S==='IX'||S==='IY' ? 2 : RP[S];
+          if (sp === undefined) throw new Error('bad 16-bit operand');
+          if ((S==='IX'||S==='IY') && S!==D) throw new Error('cannot mix IX and IY');
+          return emit(pre(D), 0x09 | (sp<<4));
+        }
+        if (D!=='A') throw new Error(M+' destination must be A');
+        const op = ALU[M];
+        const ih = idxHalf(src);
+        if (ih) return emit(pre(ih.reg), 0x80 | (op<<3) | ih.half);
+        const ix = idxOf(src);
+        if (ix) { emit(pre(ix.reg), 0x80 | (op<<3) | 6); return emit(chk8(evalExpr(ix.disp))); }
+        const r = reg8(src);
+        if (r>=0) return emit(0x80 | (op<<3) | r);
+        emit(0xC6 | (op<<3)); return emit(chk8(evalExpr(src)));
+      }
+
+      case 'RLC': case 'RRC': case 'RL': case 'RR':
+      case 'SLA': case 'SRA': case 'SLL': case 'SRL': {
+        const op = CBOPS[M];
+        const ix = idxOf(a0);
+        if (ix) return emit(pre(ix.reg), 0xCB, chk8(evalExpr(ix.disp)), (op<<3)|6);
+        const r = reg8(a0);
+        if (r<0) throw new Error('bad operand for '+M);
+        return emit(0xCB, (op<<3)|r);
+      }
+      case 'BIT': case 'RES': case 'SET': {
+        const base = M==='BIT'?0x40 : M==='RES'?0x80 : 0xC0;
+        const b = evalExpr(a0);
+        if (b<0||b>7) throw new Error('bit number must be 0-7');
+        const ix = idxOf(a1);
+        if (ix) return emit(pre(ix.reg), 0xCB, chk8(evalExpr(ix.disp)), base|(b<<3)|6);
+        const r = reg8(a1);
+        if (r<0) throw new Error('bad operand for '+M);
+        return emit(0xCB, base|(b<<3)|r);
+      }
+
+      case 'LD': return doLD(a0, a1, U0, U1);
+    }
+    throw new Error('unknown instruction "'+mn+'"');
+  }
+
+  function doLD(a0, a1, U0, U1) {
+    // 16-bit destinations
+    if (U0==='SP') {
+      if (U1==='HL') return emit(0xF9);
+      if (U1==='IX'||U1==='IY') return emit(pre(U1), 0xF9);
+    }
+    if (U0==='IX'||U0==='IY') {
+      if (isMem(a1) && !idxOf(a1)) { emit(pre(U0), 0x2A); return emitW(evalExpr(inner(a1))); }
+      emit(pre(U0), 0x21); return emitW(evalExpr(a1));
+    }
+    if (U0 in RP) {
+      if (isMem(a1)) {
+        const addr = evalExpr(inner(a1));
+        if (U0==='HL') { emit(0x2A); return emitW(addr); }
+        emit(0xED, 0x4B | (RP[U0]<<4)); return emitW(addr);
+      }
+      emit(0x01 | (RP[U0]<<4)); return emitW(evalExpr(a1));
+    }
+    // memory destinations
+    if (isMem(a0)) {
+      const ix = idxOf(a0);
+      if (ix) {
+        const d = chk8(evalExpr(ix.disp));
+        const r = reg8(a1);
+        if (r>=0 && r!==6) return emit(pre(ix.reg), 0x70|r, d);
+        emit(pre(ix.reg), 0x36, d); return emit(chk8(evalExpr(a1)));
+      }
+      const t = inner(a0).toUpperCase().replace(/\s+/g,'');
+      if (t==='HL') {
+        const r = reg8(a1);
+        if (r>=0 && r!==6) return emit(0x70|r);
+        emit(0x36); return emit(chk8(evalExpr(a1)));
+      }
+      if (t==='BC') { if (U1!=='A') throw new Error('only A can be stored via (BC)'); return emit(0x02); }
+      if (t==='DE') { if (U1!=='A') throw new Error('only A can be stored via (DE)'); return emit(0x12); }
+      const addr = evalExpr(inner(a0));
+      if (U1==='A') { emit(0x32); return emitW(addr); }
+      if (U1==='HL') { emit(0x22); return emitW(addr); }
+      if (U1==='IX'||U1==='IY') { emit(pre(U1), 0x22); return emitW(addr); }
+      if (U1 in RP) { emit(0xED, 0x43 | (RP[U1]<<4)); return emitW(addr); }
+      throw new Error('bad source for LD (nn),..');
+    }
+    // 8-bit destinations
+    if (U0==='I') { if (U1!=='A') throw new Error('LD I,A only'); return emit(0xED,0x47); }
+    if (U0==='R') { if (U1!=='A') throw new Error('LD R,A only'); return emit(0xED,0x4F); }
+    if (U0==='A') {
+      if (U1==='I') return emit(0xED,0x57);
+      if (U1==='R') return emit(0xED,0x5F);
+      const t = isMem(a1) ? inner(a1).toUpperCase().replace(/\s+/g,'') : null;
+      if (t==='BC') return emit(0x0A);
+      if (t==='DE') return emit(0x1A);
+    }
+    const dh = idxHalf(a0);
+    if (dh) {
+      const sh = idxHalf(a1);
+      if (sh) return emit(pre(dh.reg), 0x40 | (dh.half<<3) | sh.half);
+      const r = reg8(a1);
+      if (r>=0 && r!==6) return emit(pre(dh.reg), 0x40 | (dh.half<<3) | r);
+      emit(pre(dh.reg), 0x06 | (dh.half<<3)); return emit(chk8(evalExpr(a1)));
+    }
+    const d = reg8(a0);
+    if (d < 0) throw new Error('bad destination "'+a0+'"');
+    const six = idxOf(a1);
+    if (six) { if (d===6) throw new Error('cannot LD (HL),(IX+d)');
+      emit(pre(six.reg), 0x46 | (d<<3)); return emit(chk8(evalExpr(six.disp))); }
+    const sh = idxHalf(a1);
+    if (sh) { if (d===6) throw new Error('bad LD'); return emit(pre(sh.reg), 0x40 | (d<<3) | sh.half); }
+    const s = reg8(a1);
+    if (s>=0) { if (d===6 && s===6) throw new Error('LD (HL),(HL) is HALT'); return emit(0x40 | (d<<3) | s); }
+    if (isMem(a1)) {
+      if (d!==7) throw new Error('only A can load from (nn)');
+      emit(0x3A); return emitW(evalExpr(inner(a1)));
+    }
+    emit(0x06 | (d<<3)); return emit(chk8(evalExpr(a1)));
+  }
+
+  // ---------- line splitting ----------
+  function splitOperands(s) {
+    const parts = []; let depth = 0, cur = '', q = null;
+    for (let i=0;i<s.length;i++) {
+      const c = s[i];
+      if (q) { cur += c; if (c===q) q=null; continue; }
+      if (c==="'"||c==='"') { q=c; cur+=c; continue; }
+      if (c==='(') depth++;
+      if (c===')') depth--;
+      if (c===',' && depth===0) { parts.push(cur); cur=''; continue; }
+      cur += c;
+    }
+    if (cur.trim()!=='' || parts.length) parts.push(cur);
+    return parts;
+  }
+  function stripComment(s) {
+    let q = null, out = '';
+    for (let i=0;i<s.length;i++) {
+      const c = s[i];
+      if (q) { out+=c; if (c===q) q=null; continue; }
+      if (c==="'"||c==='"') { q=c; out+=c; continue; }
+      if (c===';') break;
+      out += c;
+    }
+    return out;
+  }
+  function dataItems(str) {
+    const items = [];
+    for (const raw of splitOperands(str)) {
+      const s = raw.trim();
+      if (!s) continue;
+      const m = /^(['"])([\s\S]*)\1$/.exec(s);
+      if (m && m[2].length !== 1) { for (const ch of m[2]) items.push({str:true, v:ch.charCodeAt(0)}); }
+      else items.push({str:false, v:s});
+    }
+    return items;
+  }
+
+  const lines = source.split(/\r?\n/);
+  const DIRECTIVES = new Set(['ORG','EQU','DB','DEFB','BYTE','DW','DEFW','WORD','DS','DEFS','ALIGN','END']);
+
+  for (pass = 1; pass <= 2; pass++) {
+    pc = 0; errors.length = 0; if (pass===2) listing.length = 0;
+    for (lineNo = 0; lineNo < lines.length; lineNo++) {
+      const raw = lines[lineNo];
+      let text = stripComment(raw).replace(/\t/g,' ');
+      if (!text.trim()) { if (pass===2) listing.push({line:lineNo+1, addr:null, bytes:[], text:raw}); continue; }
+      const startPC = pc;
+      try {
+        let label = null;
+        let m = /^([A-Za-z_.@][A-Za-z0-9_.@]*)\s*:/.exec(text);
+        if (m) { label = m[1]; text = text.slice(m[0].length); }
+        else {
+          m = /^([A-Za-z_.@][A-Za-z0-9_.@]*)(\s+)(\S+)/.exec(text);
+          if (m && !/^\s/.test(text)) {
+            const second = m[3].toUpperCase();
+            if (DIRECTIVES.has(second)) { label = m[1]; text = text.slice(m[1].length); }
+          }
+        }
+        text = text.trim();
+        let mn = null, rest = '';
+        if (text) { const sp = text.search(/\s/);
+          if (sp < 0) { mn = text; } else { mn = text.slice(0,sp); rest = text.slice(sp+1); } }
+        const MN = mn ? mn.toUpperCase() : '';
+
+        if (label && MN !== 'EQU') {
+          const key = label.toUpperCase();
+          if (pass===1) { if (key in symbols) throw new Error('duplicate label "'+label+'"'); symbols[key] = pc; }
+        }
+        if (MN === 'EQU') {
+          if (!label) throw new Error('EQU needs a label');
+          const v = evalExpr(rest);
+          if (pass===1) symbols[label.toUpperCase()] = v; else symbols[label.toUpperCase()] = v;
+        } else if (MN === 'ORG') { pc = evalExpr(rest) & 0xFFFF; }
+        else if (MN === 'END') { /* ignore */ }
+        else if (MN === 'ALIGN') { const a = evalExpr(rest); while (pc % a) emit(0); }
+        else if (MN === 'DB' || MN === 'DEFB' || MN === 'BYTE') {
+          for (const it of dataItems(rest)) emit(it.str ? it.v : chk8(evalExpr(it.v)));
+        }
+        else if (MN === 'DW' || MN === 'DEFW' || MN === 'WORD') {
+          for (const it of dataItems(rest)) emitW(it.str ? it.v : evalExpr(it.v));
+        }
+        else if (MN === 'DS' || MN === 'DEFS') {
+          const parts = splitOperands(rest);
+          const n = evalExpr(parts[0]);
+          const fill = parts[1] !== undefined ? evalExpr(parts[1]) : 0;
+          for (let i=0;i<n;i++) emit(fill);
+        }
+        else if (MN) { doInstruction(mn, splitOperands(rest)); }
+
+        if (pass===2) {
+          const bytes = [];
+          for (let a=startPC; a<pc; a++) bytes.push(out[a]);
+          listing.push({line:lineNo+1, addr: bytes.length?startPC:null, bytes, text:raw});
+        }
+      } catch (e) {
+        errors.push({ line: lineNo+1, message: e.message, text: raw.trim() });
+        if (pass===2) listing.push({line:lineNo+1, addr:null, bytes:[], text:raw});
+      }
+    }
+  }
+
+  return { bytes: out, used, start: minAddr, end: maxAddr, symbols, errors, listing };
+}
+if (typeof module !== 'undefined') module.exports = { assemble };
+</script>
+<script>// Amstrad CPC 464 hardware model (RAM-only: firmware ROMs are not emulated).
+// Gate Array 40010, CRTC 6845 (subset), PPI 8255 keyboard reads.
+
+const CPC_PALETTE = (() => {
+  // 27 firmware colours -> RGB, then the 32 gate-array hardware entries.
+  const L = [0, 128, 255];
+  const c = (r,g,b) => [L[r], L[g], L[b]];
+  const N = {
+    black:c(0,0,0), blue:c(0,0,1), brightBlue:c(0,0,2),
+    red:c(1,0,0), magenta:c(1,0,1), mauve:c(1,0,2),
+    brightRed:c(2,0,0), purple:c(2,0,1), brightMagenta:c(2,0,2),
+    green:c(0,1,0), cyan:c(0,1,1), skyBlue:c(0,1,2),
+    yellow:c(1,1,0), white:c(1,1,1), pastelBlue:c(1,1,2),
+    orange:c(2,1,0), pink:c(2,1,1), pastelMagenta:c(2,1,2),
+    brightGreen:c(0,2,0), seaGreen:c(0,2,1), brightCyan:c(0,2,2),
+    lime:c(1,2,0), pastelGreen:c(1,2,1), pastelCyan:c(1,2,2),
+    brightYellow:c(2,2,0), pastelYellow:c(2,2,1), brightWhite:c(2,2,2)
+  };
+  const order = [
+    N.white, N.white, N.seaGreen, N.pastelYellow, N.blue, N.purple, N.cyan, N.pink,
+    N.purple, N.pastelCyan, N.pastelYellow, N.brightWhite, N.brightRed, N.brightMagenta,
+    N.orange, N.pastelMagenta, N.lime, N.pastelGreen, N.brightGreen, N.brightCyan,
+    N.black, N.brightBlue, N.green, N.skyBlue, N.magenta, N.pastelCyan, N.brightYellow,
+    N.brightWhite, N.red, N.mauve, N.yellow, N.pastelBlue
+  ];
+  return order;
+})();
+
+// Pixel decode tables: [mode][byte] -> array of pen numbers
+const PIXEL_TABLES = (() => {
+  const t = [[],[],[]];
+  for (let b = 0; b < 256; b++) {
+    t[0][b] = [
+      ((b&0x80)>>7) | ((b&0x08)>>2) | ((b&0x20)>>3) | ((b&0x02)<<2),
+      ((b&0x40)>>6) | ((b&0x04)>>1) | ((b&0x10)>>2) | ((b&0x01)<<3)
+    ];
+    t[1][b] = [
+      ((b&0x80)>>7) | ((b&0x08)>>2),
+      ((b&0x40)>>6) | ((b&0x04)>>1),
+      ((b&0x20)>>5) | ((b&0x02)),
+      ((b&0x10)>>4) | ((b&0x01)<<1)
+    ];
+    t[2][b] = [7,6,5,4,3,2,1,0].map(s => (b>>s)&1);
+  }
+  return t;
+})();
+
+// CPC key matrix: line -> [bit0..bit7]
+const CPC_KEYS = [
+  ['ArrowUp','ArrowRight','ArrowDown','F9','F6','F3','NumpadEnter','NumpadDecimal'],
+  ['ArrowLeft','Numpad5','F7','F8','F5','F1','F2','F0'],
+  ['Clr','BracketLeft','Enter','BracketRight','F4','ShiftLeft','Backslash','ControlLeft'],
+  ['Caret','Minus','At','KeyP','Semicolon','Colon','Slash','Period'],
+  ['Digit0','Digit9','KeyO','KeyI','KeyL','KeyK','KeyM','Comma'],
+  ['Digit8','Digit7','KeyU','KeyY','KeyH','KeyJ','KeyN','Space'],
+  ['Digit6','Digit5','KeyR','KeyT','KeyG','KeyF','KeyB','KeyV'],
+  ['Digit4','Digit3','KeyE','KeyW','KeyS','KeyD','KeyC','KeyX'],
+  ['Digit1','Digit2','Escape','KeyQ','Tab','KeyA','CapsLock','KeyZ'],
+  ['JoyUp','JoyDown','JoyLeft','JoyRight','JoyFire1','JoyFire2','JoySpare','Delete']
+];
+
+const BORDER_X = 48;                 // screen pixels of border either side
+const BORDER_Y = 24;                 // scanlines of border above and below
+const WIDTH = 640 + BORDER_X * 2;    // 736
+const HEIGHT = (200 + BORDER_Y * 2) * 2;  // 496
+
+const CYCLES_PER_LINE = 256;
+const LINES_PER_FRAME = 312;
+const CYCLES_PER_FRAME = CYCLES_PER_LINE * LINES_PER_FRAME;   // 79872 @ 4MHz -> 50.08Hz
+const INTERRUPT_LINES = 52;
+const VSYNC_START = 240;      // CRTC R7: sync pulse after the displayed rows
+const VSYNC_LINES = 8;
+
+function makeCPC() {
+  const ram = new Uint8Array(0x10000);
+  const pens = new Uint8Array(17);          // 0-15 inks, 16 = border
+  const crtc = new Uint8Array(32);
+  const keys = new Uint8Array(10).fill(0xFF);
+  // Palette snapshot per scanline, so mid-frame ink changes (raster bars)
+  // actually show up in the rendered picture.
+  const linePens = new Uint8Array(LINES_PER_FRAME * 17);
+
+  const machine = {
+    ram, pens, crtc, keys, linePens,
+    mode: 1,
+    penSelect: 0,
+    crtcSelect: 0,
+    kbdLine: 0,
+    vsync: false,
+    gaConfig: 0x8D,        // Gate Array multi-configuration register
+    ramConfig: 0,
+    romSelect: 0,
+    ppiA: 0, ppiB: 0, ppiC: 0, ppiControl: 0x82,
+    psgSelect: 0,
+    psg: new Uint8Array(16),
+    frameCycles: 0,
+    lineCounter: 0,
+    interruptCounter: 0,
+    frames: 0,
+    outLog: []
+  };
+
+  // CRTC register defaults as the CPC firmware leaves them
+  const CRTC_DEFAULTS = [63, 40, 46, 0x8E, 38, 0, 25, 30, 0, 7, 0, 0, 0x30, 0, 0, 0, 0, 0];
+  crtc.set(CRTC_DEFAULTS);
+  pens.fill(20);  // all black
+  linePens.fill(20);
+
+  const bus = {
+    read: a => ram[a],
+    write: (a, v) => { ram[a] = v; },
+    out: (port, v) => {
+      if ((port & 0xC000) === 0x4000) {          // Gate Array
+        switch (v & 0xC0) {
+          case 0x00: machine.penSelect = (v & 0x10) ? 16 : (v & 0x0F); break;
+          case 0x40: pens[machine.penSelect] = v & 0x1F; break;
+          case 0x80: machine.mode = v & 0x03; machine.gaConfig = v; break;
+          case 0xC0: machine.ramConfig = v; break;
+        }
+      } else if ((port & 0x4000) === 0 && (port & 0x8000) === 0x8000) {
+        // 0xBCxx-0xBFxx: CRTC
+        const fn = (port >> 8) & 3;
+        if (fn === 0) machine.crtcSelect = v & 0x1F;
+        else if (fn === 1) crtc[machine.crtcSelect] = v;
+      } else if ((port & 0x2000) === 0) {
+        machine.romSelect = v;                       // &DFxx: upper ROM number
+      } else if ((port & 0x0800) === 0) {
+        // 0xF4xx-0xF7xx: PPI
+        const fn = (port >> 8) & 3;
+        if (fn === 0) machine.ppiA = v;
+        else if (fn === 1) machine.ppiB = v;
+        else if (fn === 2) { machine.ppiC = v; machine.kbdLine = v & 0x0F; }
+        else if (v & 0x80) machine.ppiControl = v;
+      }
+    },
+    in: port => {
+      if ((port & 0x0800) === 0) {
+        const fn = (port >> 8) & 3;
+        if (fn === 0) return keys[machine.kbdLine] ?? 0xFF;  // port A: key matrix
+        if (fn === 1) return (machine.vsync ? 0x01 : 0x00) | 0x1E; // port B: bit0 VSYNC
+      }
+      return 0xFF;
+    }
+  };
+
+  machine.bus = bus;
+  machine.setKey = (line, bit, down) => {
+    if (down) keys[line] &= ~(1 << bit); else keys[line] |= (1 << bit);
+  };
+  machine.keyByName = name => {
+    for (let l = 0; l < CPC_KEYS.length; l++) {
+      const b = CPC_KEYS[l].indexOf(name);
+      if (b >= 0) return [l, b];
+    }
+    return null;
+  };
+  machine.reset = () => {
+    machine.mode = 1; machine.penSelect = 0; machine.kbdLine = 0;
+    machine.frameCycles = 0; machine.lineCounter = 0; machine.interruptCounter = 0;
+    machine.frames = 0; machine.vsync = false;
+    pens.fill(20); keys.fill(0xFF); linePens.fill(20);
+    crtc.set(CRTC_DEFAULTS);
+    machine.gaConfig = 0x8D; machine.ramConfig = 0; machine.romSelect = 0;
+    machine.ppiA = 0; machine.ppiB = 0; machine.ppiC = 0; machine.ppiControl = 0x82;
+    machine.psgSelect = 0; machine.psg.fill(0);
+  };
+
+  // Render one frame into an RGBA buffer, BORDER_X/BORDER_Y included.
+  // Every scanline uses its own palette snapshot, so raster splits survive
+  // into the border just as they do on a real machine.
+  machine.render = (rgba) => {
+    const base = (crtc[12] & 0x30) << 10;
+    const offset = (((crtc[12] & 0x03) << 8) | crtc[13]) * 2;
+    const bytesPerLine = crtc[1] * 2;
+    const rows = Math.min(crtc[6], 25) * 8;
+    const table = PIXEL_TABLES[machine.mode];
+    const dotsPerByte = machine.mode === 0 ? 2 : machine.mode === 1 ? 4 : 8;
+    const scale = 8 / dotsPerByte;
+    const rgb = new Uint8Array(48);
+
+    const fillRow = (o0, col) => {
+      for (let x = 0; x < WIDTH; x++) {
+        const o = o0 + x*4;
+        rgba[o]=col[0]; rgba[o+1]=col[1]; rgba[o+2]=col[2]; rgba[o+3]=255;
+      }
+    };
+    const dbl = o0 => rgba.copyWithin(o0 + WIDTH*4, o0, o0 + WIDTH*4);
+
+    for (let i = 0; i < BORDER_Y; i++) {           // top border
+      const line = (LINES_PER_FRAME - BORDER_Y + i) % LINES_PER_FRAME;
+      const o0 = (i * 2) * WIDTH * 4;
+      fillRow(o0, CPC_PALETTE[linePens[line * 17 + 16] & 0x1F]);
+      dbl(o0);
+    }
+    for (let y = 0; y < 200; y++) {                // displayed rows
+      const lp = y * 17;
+      for (let p = 0; p < 16; p++) {
+        const col = CPC_PALETTE[linePens[lp + p] & 0x1F];
+        rgb[p*3] = col[0]; rgb[p*3+1] = col[1]; rgb[p*3+2] = col[2];
+      }
+      const borderCol = CPC_PALETTE[linePens[lp + 16] & 0x1F];
+      const o0 = ((y + BORDER_Y) * 2) * WIDTH * 4;
+      fillRow(o0, borderCol);
+      if (y < rows) {
+        const raster = y & 7, charRow = y >> 3;
+        const lineStart = (charRow * bytesPerLine + offset) & 0x7FF;
+        let x = BORDER_X;
+        for (let b = 0; b < 80 && x < BORDER_X + 640; b++) {
+          const addr = base + raster * 0x800 + ((lineStart + b) & 0x7FF);
+          const pix = table[ram[addr]];
+          for (let i = 0; i < pix.length; i++) {
+            const p = pix[i] * 3;
+            for (let s = 0; s < scale; s++) {
+              const o = o0 + x*4;
+              rgba[o]=rgb[p]; rgba[o+1]=rgb[p+1]; rgba[o+2]=rgb[p+2]; rgba[o+3]=255;
+              x++;
+            }
+          }
+        }
+      }
+      dbl(o0);
+    }
+    for (let i = 0; i < BORDER_Y; i++) {           // bottom border
+      const line = (200 + i) % LINES_PER_FRAME;
+      const o0 = ((200 + BORDER_Y + i) * 2) * WIDTH * 4;
+      fillRow(o0, CPC_PALETTE[linePens[line * 17 + 16] & 0x1F]);
+      dbl(o0);
+    }
+  };
+
+  machine.borderColour = () => CPC_PALETTE[pens[16] & 0x1F];
+  return machine;
+}
+
+// Runs the machine until the raster reaches the end of the displayed area,
+// so a rendered snapshot always shows a complete, untorn picture.
+const RENDER_LINE = 200;
+
+function runFrame(cpu, m) {
+  let guard = 0;
+  m.frameReady = false;
+  while (!m.frameReady && ++guard < 400000) {
+    const before = cpu.tstates;
+    cpu.step();
+    m.frameCycles += cpu.tstates - before;
+    while (m.frameCycles >= CYCLES_PER_LINE) {
+      m.frameCycles -= CYCLES_PER_LINE;
+      m.lineCounter = (m.lineCounter + 1) % LINES_PER_FRAME;
+      m.linePens.set(m.pens, m.lineCounter * 17);
+      m.vsync = m.lineCounter >= VSYNC_START && m.lineCounter < VSYNC_START + VSYNC_LINES;
+      m.interruptCounter++;
+      if (m.lineCounter === VSYNC_START + 2) {
+        // The Gate Array resynchronises its interrupt counter here, two HSYNCs
+        // after the start of VSYNC. This is what ties raster effects to the frame.
+        if (m.interruptCounter >= 32) cpu.interrupt();
+        m.interruptCounter = 0;
+      } else if (m.interruptCounter >= INTERRUPT_LINES) {
+        m.interruptCounter = 0; cpu.interrupt();
+      }
+      if (m.lineCounter === RENDER_LINE) m.frameReady = true;
+    }
+  }
+  m.frames++;
+}
+
+// Write the whole machine out as a version 2 .SNA snapshot: a 256-byte
+// header of Z80, Gate Array, CRTC, PPI and PSG state, then the 64K of RAM.
+// Every CPC emulator reads this, which makes it the way to check that code
+// written here behaves the same somewhere else.
+function snapshotSNA(cpu, m) {
+  const out = new Uint8Array(0x100 + 0x10000);
+  const id = 'MV - SNA';
+  for (let i = 0; i < 8; i++) out[i] = id.charCodeAt(i);
+  out[0x10] = 2;                                   // snapshot version
+  out[0x11] = cpu.F;      out[0x12] = cpu.R[7];    // AF
+  out[0x13] = cpu.R[1];   out[0x14] = cpu.R[0];    // BC
+  out[0x15] = cpu.R[3];   out[0x16] = cpu.R[2];    // DE
+  out[0x17] = cpu.R[5];   out[0x18] = cpu.R[4];    // HL
+  out[0x19] = cpu.Rr & 0xFF; out[0x1A] = cpu.I;
+  out[0x1B] = cpu.IFF1 ? 1 : 0;
+  out[0x1C] = cpu.IFF2 ? 1 : 0;
+  out[0x1D] = cpu.IX & 0xFF;  out[0x1E] = (cpu.IX >> 8) & 0xFF;
+  out[0x1F] = cpu.IY & 0xFF;  out[0x20] = (cpu.IY >> 8) & 0xFF;
+  out[0x21] = cpu.SP & 0xFF;  out[0x22] = (cpu.SP >> 8) & 0xFF;
+  out[0x23] = cpu.PC & 0xFF;  out[0x24] = (cpu.PC >> 8) & 0xFF;
+  out[0x25] = cpu.IM;
+  out[0x26] = cpu.Fs;     out[0x27] = cpu.Rs[7];   // AF'
+  out[0x28] = cpu.Rs[1];  out[0x29] = cpu.Rs[0];   // BC'
+  out[0x2A] = cpu.Rs[3];  out[0x2B] = cpu.Rs[2];   // DE'
+  out[0x2C] = cpu.Rs[5];  out[0x2D] = cpu.Rs[4];   // HL'
+  out[0x2E] = m.penSelect & 0x1F;
+  for (let p = 0; p < 17; p++) out[0x2F + p] = m.pens[p] & 0x1F;
+  out[0x40] = (m.gaConfig & 0x1F) | 0x80;
+  out[0x41] = m.ramConfig & 0x3F;
+  out[0x42] = m.crtcSelect & 0x1F;
+  for (let r = 0; r < 18; r++) out[0x43 + r] = m.crtc[r];
+  out[0x55] = m.romSelect & 0xFF;
+  out[0x56] = m.ppiA & 0xFF;
+  out[0x57] = m.ppiB & 0xFF;
+  out[0x58] = m.ppiC & 0xFF;
+  out[0x59] = m.ppiControl | 0x80;
+  out[0x5A] = m.psgSelect & 0x0F;
+  for (let i = 0; i < 16; i++) out[0x5B + i] = m.psg[i];
+  out[0x6B] = 64; out[0x6C] = 0;                   // 64K memory dump
+  out[0x6D] = 0;                                   // CPC 464
+  out[0x6E] = 0;                                   // interrupt number
+  out.set(m.ram, 0x100);
+  return out;
+}
+
+if (typeof module !== 'undefined') module.exports = { makeCPC, runFrame, snapshotSNA, CPC_PALETTE, CPC_KEYS, CYCLES_PER_FRAME, WIDTH, HEIGHT, BORDER_X, BORDER_Y };
+</script>
+<script>
+(function () {
+  const DEFAULT_SRC = document.getElementById('demo-src').textContent.replace(/^\n/, '');
+  const srcBox   = document.getElementById('src');
+  const canvas   = document.getElementById('screen');
+  const ctx      = canvas.getContext('2d');
+  const errBox   = document.getElementById('errors');
+  const okBox    = document.getElementById('ok');
+  const inksBox  = document.getElementById('r-inks');
+  srcBox.value = DEFAULT_SRC;
+
+  const machine = makeCPC();
+  const cpu = makeZ80(machine.bus);
+  const image = ctx.createImageData(WIDTH, HEIGHT);
+  const rgba = image.data;
+  let running = false, codeSize = 0, snapshot = null;
+
+  // --- the page heading, drawn with the same 8x8 font the demo uses ---
+  function drawWordmark(fontBytes) {
+    const text = 'AMSTRAD CPC 464';
+    const s = Math.max(2, Math.min(4, Math.floor((Math.min(window.innerWidth - 40, 1180)) / (text.length * 8))));
+    const c = document.getElementById('wordmark');
+    c.width = text.length * 8 * s + s * 2; c.height = 8 * s + s * 2;
+    const g = c.getContext('2d');
+    for (let i = 0; i < text.length; i++) {
+      const code = text.charCodeAt(i);
+      if (code < 32 || code > 90) continue;
+      const base = (code - 32) * 8;
+      for (let row = 0; row < 8; row++) {
+        const bits = fontBytes[base + row];
+        for (let col = 0; col < 8; col++) {
+          if (!(bits & (0x80 >> col))) continue;
+          g.fillStyle = 'rgba(0,0,0,.55)';
+          g.fillRect((i*8+col)*s + s*1.5, row*s + s*1.5, s, s);
+          g.fillStyle = row < 3 ? '#ffff00' : (row < 6 ? '#ff8000' : '#ff0000');
+          g.fillRect((i*8+col)*s, row*s, s, s);
+        }
+      }
+    }
+  }
+
+  function showErrors(errors) {
+    errBox.innerHTML = '';
+    okBox.textContent = '';
+    if (!errors.length) {
+      okBox.textContent = 'Assembled ' + codeSize + ' bytes. Running.';
+      return;
+    }
+    for (const e of errors.slice(0, 12)) {
+      const li = document.createElement('li');
+      li.textContent = 'line ' + e.line + ': ' + e.message;
+      errBox.appendChild(li);
+    }
+    if (errors.length > 12) {
+      const li = document.createElement('li');
+      li.textContent = 'and ' + (errors.length - 12) + ' more';
+      errBox.appendChild(li);
+    }
+  }
+
+  function build() {
+    const result = assemble(srcBox.value);
+    if (result.errors.length) { codeSize = 0; showErrors(result.errors); return false; }
+    codeSize = result.end - result.start;
+    machine.reset();
+    machine.ram.fill(0);
+    for (let a = result.start; a < result.end; a++) machine.ram[a] = result.bytes[a];
+    cpu.reset();
+    cpu.PC = ('START' in result.symbols) ? result.symbols['START'] : result.start;
+    snapshot = snapshotSNA(cpu, machine);   // captured at the entry point
+    document.getElementById('r-size').textContent = codeSize + ' bytes';
+    showErrors([]);
+    if (!('FONT' in result.symbols)) return true;
+    const f = result.symbols['FONT'];
+    drawWordmark(Array.from(machine.ram.slice(f, f + 472)));
+    return true;
+  }
+
+  function paint() {
+    machine.render(rgba);
+    ctx.putImageData(image, 0, 0);
+    document.getElementById('r-frame').textContent = machine.frames;
+    document.getElementById('r-pc').textContent = '&' + cpu.PC.toString(16).toUpperCase().padStart(4, '0');
+    document.getElementById('r-mode').textContent = machine.mode;
+    inksBox.innerHTML = '';
+    const shown = machine.mode === 0 ? 16 : machine.mode === 1 ? 4 : 2;
+    for (let p = 0; p < shown; p++) {
+      const c = CPC_PALETTE[machine.pens[p] & 0x1F];
+      const sp = document.createElement('span');
+      sp.style.background = 'rgb(' + c[0] + ',' + c[1] + ',' + c[2] + ')';
+      inksBox.appendChild(sp);
+    }
+  }
+
+  let last = 0, acc = 0;
+  function tick(now) {
+    requestAnimationFrame(tick);
+    if (!running) { last = now; return; }
+    if (!last) last = now;
+    acc += now - last; last = now;
+    if (acc > 120) acc = 120;              // never try to catch up more than six frames
+    let drawn = false;
+    while (acc >= 19.968) { acc -= 19.968; runFrame(cpu, machine); drawn = true; }
+    if (drawn) paint();
+  }
+
+  function setRunning(on) {
+    running = on;
+    document.getElementById('pause').textContent = on ? 'Pause' : 'Resume';
+  }
+
+  document.getElementById('assemble').addEventListener('click', () => {
+    if (build()) { setRunning(true); paint(); }
+    else setRunning(false);
+  });
+  document.getElementById('pause').addEventListener('click', () => setRunning(!running));
+  document.getElementById('export').addEventListener('click', () => {
+    if (!snapshot) return;
+    const url = URL.createObjectURL(new Blob([snapshot], { type: 'application/octet-stream' }));
+    const a = document.createElement('a');
+    a.href = url; a.download = 'raster.sna';
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  });
+  document.getElementById('reset').addEventListener('click', () => { build(); setRunning(true); paint(); });
+  document.getElementById('restore').addEventListener('click', () => {
+    srcBox.value = DEFAULT_SRC; build(); setRunning(true); paint();
+  });
+
+  // Keyboard wired to the real CPC matrix, so programs can read it at &F4xx.
+  const held = new Set();
+  window.addEventListener('keydown', e => {
+    if (e.target === srcBox) return;
+    const k = machine.keyByName(e.code);
+    if (!k) return;
+    machine.setKey(k[0], k[1], true); held.add(e.code);
+    if (e.code === 'Space' || e.code.startsWith('Arrow')) e.preventDefault();
+  });
+  window.addEventListener('keyup', e => {
+    const k = machine.keyByName(e.code);
+    if (k) { machine.setKey(k[0], k[1], false); held.delete(e.code); }
+  });
+  window.addEventListener('blur', () => {
+    for (const code of held) { const k = machine.keyByName(code); if (k) machine.setKey(k[0], k[1], false); }
+    held.clear();
+  });
+
+  build();
+  setRunning(true);
+  requestAnimationFrame(tick);
+})();
+</script>
+</body>
+</html>

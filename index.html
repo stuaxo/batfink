@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Amstrad CPC 464 — Z80 demo and assembler</title>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <canvas id="wordmark" aria-label="Amstrad CPC 464"></canvas>
+    <p class="standfirst">
+      A 1984 home computer, rebuilt in JavaScript: <b>Z80 processor, Gate Array, 6845 video controller.</b>
+      The demo running on the screen is machine code, assembled from the listing beside it.
+      Change the listing and assemble it again to see what happens.
+    </p>
+  </header>
+
+  <div class="bay">
+    <section>
+      <div class="monitor">
+        <div class="tube"><canvas id="screen" width="736" height="496"></canvas></div>
+        <div class="plate"><span class="model">AMSTRAD CPC 464</span><span>64K &middot; mode 1 &middot; 320 &times; 200</span></div>
+      </div>
+
+      <div class="panel">
+        <div class="keys">
+          <button id="assemble" class="primary">Assemble and run</button>
+          <button id="pause">Pause</button>
+          <button id="reset">Reset</button>
+          <button id="export">Download .sna</button>
+          <button id="restore">Restore listing</button>
+        </div>
+        <dl class="readout">
+          <div><dt>Frame</dt><dd id="r-frame">0</dd></div>
+          <div><dt>Program counter</dt><dd id="r-pc">&amp;0000</dd></div>
+          <div><dt>Screen mode</dt><dd id="r-mode">1</dd></div>
+          <div><dt>Code size</dt><dd id="r-size">0 bytes</dd></div>
+          <div><dt>Inks</dt><dd><div class="inks" id="r-inks"></div></dd></div>
+        </dl>
+      </div>
+    </section>
+
+    <section class="listing">
+      <h2>Program listing &mdash; Z80 assembly</h2>
+      <div class="fanfold"><textarea id="src" spellcheck="false" aria-label="Z80 assembly source"></textarea></div>
+      <ul class="errors" id="errors"></ul>
+      <p class="ok" id="ok"></p>
+    </section>
+  </div>
+
+  <section class="notes">
+    <h2>What the machine is doing</h2>
+    <p>
+      There is no firmware here. The program pages both ROMs out and writes straight to the hardware,
+      which is how demos were actually written.
+    </p>
+    <dl>
+      <dt>&amp;7F00</dt><dd>Gate Array. Picks an ink, sets its colour, and selects the screen mode.</dd>
+      <dt>&amp;F500</dt><dd>PPI port B. Bit 0 goes high during the vertical sync pulse, which is how the program stays at 50Hz.</dd>
+      <dt>&amp;0038</dt><dd>Interrupt vector. The CPC interrupts six times a frame, every 52 scanlines.</dd>
+      <dt>&amp;C000</dt><dd>Screen memory. 16K, and famously not linear: eight interleaved blocks of &amp;800, one per raster line within a character row.</dd>
+    </dl>
+    <p>
+      The colour bands are ink 0 being rewritten twelve times while the CRT is still drawing the picture,
+      three scanlines apart, from inside the interrupt handler. That effect costs exactly what it covers:
+      36 scanlines of screen means 36 scanlines of processor time gone. The rest of the frame has to fit
+      in what is left, which is why the sprites are cheap and the scrolling text runs in a window rather
+      than the full 320 pixels. As written it uses about 280 of the 312 scanlines in a frame.
+    </p>
+    <p>
+      Instructions are charged the way the Gate Array charges them: every one is stretched to a multiple
+      of four T-states, and the interrupt counter is resynchronised two scanlines into the vertical sync
+      pulse. Without both of those, hand-timed raster code lands in the wrong place.
+    </p>
+    <h2>Checking it on another emulator</h2>
+    <p>
+      <b>Download .sna</b> writes a version 2 CPC snapshot: a 256-byte header holding the Z80 registers,
+      the Gate Array palette and mode, the CRTC registers and the PPI state, followed by all 64K of RAM.
+      It is captured at the entry point with both ROMs already paged out, so nothing depends on firmware
+      being present. Drop the file on any of these and it should look the same:
+    </p>
+    <dl>
+      <dt>tiny8bit</dt><dd>Andre Weissflog's WebAssembly CPC at <code>floooh.github.io/tiny8bit/cpc.html</code>. The <code>cpc-ui</code> build adds a Z80 disassembler and memory viewer, which makes it the most useful of the three for finding out why something differs.</dd>
+      <dt>CPCBox</dt><dd>A JavaScript CPC at <code>cpcbox.com</code>, cycle-accurate enough for demo code.</dd>
+      <dt>WinAPE / Caprice32 / RVM</dt><dd>Desktop emulators. WinAPE in particular has a good debugger and is the usual reference for CPC timing.</dd>
+    </dl>
+    <p>
+      Two things will not match. There is no sound here at all, so any PSG registers in the snapshot are
+      zero. And while instruction timing follows the Gate Array's four-cycle rule, it is charged per
+      instruction rather than per machine cycle, so a raster split placed to the exact T-state may drift
+      by a few cycles against a reference emulator.
+    </p>
+    <p>
+      The assembler supports labels, <code>org</code>, <code>equ</code>, <code>db</code>, <code>dw</code>,
+      <code>ds</code>, the full base instruction set, <code>CB</code> shifts and bit operations,
+      <code>ED</code> block moves, and the <code>IX</code> / <code>IY</code> index registers.
+      Numbers can be written <code>&amp;FF</code>, <code>#FF</code>, <code>0xFF</code>, <code>%1010</code> or plain decimal.
+      Execution starts at the label <code>start</code>.
+    </p>
+  </section>
+</div>
+
+<script type="module" src="/src/main.ts"></script>
+</body>
+</html>

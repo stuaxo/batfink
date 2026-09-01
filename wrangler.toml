@@ -1,0 +1,8 @@
+# Serves the built playground as static assets on Cloudflare Workers.
+# No Worker script: the Z80 assembler and emulator run entirely in the browser.
+name = "batfink"
+compatibility_date = "2025-01-01"
+
+[assets]
+directory = "./dist"
+not_found_handling = "single-page-application"

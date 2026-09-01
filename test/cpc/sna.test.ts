@@ -33,4 +33,19 @@ describe('.SNA snapshot', () => {
     expect(sna[0x2f]).toBe(0x14); // pen 0
     expect(sna[0x40] & 0x1f).toBe(0x0d); // GA config low bits
   });
+
+  it('captures PSG register state', () => {
+    const m = makeCPC();
+    const cpu = makeZ80(m.bus);
+    // write PSG R8 (volume A) = 0x0f via the PPI
+    m.bus.out(0xf400, 8);
+    m.bus.out(0xf6c0, 0xc0);
+    m.bus.out(0xf600, 0x00);
+    m.bus.out(0xf400, 0x0f);
+    m.bus.out(0xf680, 0x80);
+
+    const sna = snapshotSNA(cpu, m);
+    expect(sna[0x5a]).toBe(8); // selected register
+    expect(sna[0x5b + 8]).toBe(0x0f); // R8 value
+  });
 });

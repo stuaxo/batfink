@@ -130,9 +130,9 @@ Rough; re-plan after the spike.
    — `PRINT` + expressions, entering and `RUN`ning a program with a `GOTO` loop,
    `INK`/`BORDER`, firmware `SOUND`, and `CALL`ing poked machine code all work.
    Nothing to fix.
-5. **Minimal FDC 765** — `src/cpc/fdc.ts` + a `.dsk` sector reader. Tests
-   against a `.dsk` we build ourselves: Read ID, Seek, Read Data return the
-   right bytes.
+5. **Minimal FDC 765** — `src/cpc/fdc.ts` + a `.dsk` sector reader. Design and
+   the traced AMSDOS command sequence: [`fdc.md`](fdc.md). Tests against a `.dsk`
+   we build ourselves: Read ID, Seek, Read Data return the right bytes.
 6. **AMSDOS + mount** — AMSDOS as ROM 7; a "mount disc" control; `RUN"` an
    exported `.dsk`. This is the payoff and the Tier-C-without-MAME check.
 7. **Cassette via firmware** — `.cdt` `RUN"` through the firmware tape routines.

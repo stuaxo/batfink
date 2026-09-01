@@ -168,6 +168,18 @@ describe('playground wiring', () => {
     expect((document.getElementById('dbg-addr') as HTMLInputElement).value).toMatch(/^&C0/);
   });
 
+  it('the instruction trace records when enabled and shows on pause', () => {
+    boot();
+    const toggle = document.getElementById('trace-on') as HTMLInputElement;
+    toggle.checked = true;
+    toggle.dispatchEvent(new Event('change'));
+    // step a few instructions
+    for (let i = 0; i < 4; i++) document.getElementById('dbg-step')!.dispatchEvent(new Event('click'));
+    const out = document.getElementById('trace-out')!;
+    expect(out.hidden).toBe(false);
+    expect(out.textContent).toMatch(/[0-9A-F]{4} {2}\S.*A=[0-9a-f]{2}/);
+  });
+
   it('the frame-budget profiler produces a breakdown', () => {
     boot();
     document.getElementById('prof-measure')!.dispatchEvent(new Event('click'));

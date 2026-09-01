@@ -177,6 +177,8 @@
   .dbg-line.bp { color: var(--cpc-red); }
   .dbg-line.bp::before { content: "● "; }
   .dbg-line:not(.bp)::before { content: "  "; }
+  .dbg-trace-toggle { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--legend-dim); }
+  #trace-out { max-height: 220px; overflow-y: auto; color: var(--legend-dim); font-size: 11px; }
   .dbg-membar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
   .dbg-membar label { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--legend-dim); }
   .dbg-membar input { font: inherit; font-size: 12.5px; padding: 4px 7px; width: 9em;

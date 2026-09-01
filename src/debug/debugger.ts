@@ -2,8 +2,9 @@
 // and breakpoints, on top of runUntil. DOM-free; the UI wires buttons to this
 // and re-renders on `onStop`.
 import type { Z80 } from '../z80/cpu';
-import { type CPCMachine, runUntil } from '../cpc';
+import { type CPCMachine, runUntil, type RunCondition } from '../cpc';
 import { disassemble } from '../asm';
+import { Trace } from './trace';
 
 const STEP_OVER_LIMIT = 4_000_000; // instructions before step-over gives up
 
@@ -20,10 +21,18 @@ export interface RegisterView {
 export class Debugger {
   state: DebugState = 'running';
   readonly breakpoints = new Set<number>();
+  readonly trace: Trace;
   /** Called whenever execution pauses (breakpoint, or a step completed). */
   onStop: (() => void) | null = null;
 
-  constructor(private readonly cpu: Z80, private readonly m: CPCMachine) {}
+  constructor(private readonly cpu: Z80, private readonly m: CPCMachine) {
+    this.trace = new Trace(cpu);
+  }
+
+  /** Add the trace hook to a run condition when recording is on. */
+  private traced(cond: RunCondition): RunCondition {
+    return this.trace.enabled ? { ...cond, onStep: this.trace.record } : cond;
+  }
 
   isPaused(): boolean {
     return this.state === 'paused';
@@ -33,7 +42,7 @@ export class Debugger {
   runFrames(frames: number): void {
     if (this.state === 'paused') return;
     for (let i = 0; i < frames; i++) {
-      const reason = runUntil(this.cpu, this.m, { frame: true, breakpoints: this.breakpoints });
+      const reason = runUntil(this.cpu, this.m, this.traced({ frame: true, breakpoints: this.breakpoints }));
       if (reason === 'frame') this.m.frames++;
       if (reason === 'breakpoint') { this.pause(); return; }
     }
@@ -55,7 +64,7 @@ export class Debugger {
   /** One instruction. Leaves the machine paused. */
   step(): void {
     this.state = 'paused';
-    runUntil(this.cpu, this.m, { maxSteps: 1 });
+    runUntil(this.cpu, this.m, this.traced({ maxSteps: 1 }));
     this.onStop?.();
   }
 
@@ -67,9 +76,9 @@ export class Debugger {
       const ret = (this.cpu.PC + d.length) & 0xffff;
       const bp = new Set(this.breakpoints);
       bp.add(ret);
-      runUntil(this.cpu, this.m, { breakpoints: bp, maxSteps: STEP_OVER_LIMIT });
+      runUntil(this.cpu, this.m, this.traced({ breakpoints: bp, maxSteps: STEP_OVER_LIMIT }));
     } else {
-      runUntil(this.cpu, this.m, { maxSteps: 1 });
+      runUntil(this.cpu, this.m, this.traced({ maxSteps: 1 }));
     }
     this.onStop?.();
   }
@@ -78,8 +87,8 @@ export class Debugger {
   runToCursor(addr: number): void {
     const bp = new Set(this.breakpoints);
     bp.add(addr & 0xffff);
-    runUntil(this.cpu, this.m, { maxSteps: 1 }); // move off the current instruction
-    runUntil(this.cpu, this.m, { breakpoints: bp, maxSteps: STEP_OVER_LIMIT });
+    runUntil(this.cpu, this.m, this.traced({ maxSteps: 1 })); // move off the current instruction
+    runUntil(this.cpu, this.m, this.traced({ breakpoints: bp, maxSteps: STEP_OVER_LIMIT }));
     this.state = 'paused';
     this.onStop?.();
   }
@@ -112,6 +121,14 @@ export class Debugger {
     const out = new Uint8Array(length);
     for (let i = 0; i < length; i++) out[i] = this.m.ram[(addr + i) & 0xffff];
     return out;
+  }
+
+  /** The last `n` traced instructions, most recent first, each disassembled. */
+  traceLines(n: number): Array<{ pc: number; a: number; f: number; bc: number; de: number; hl: number; sp: number; text: string }> {
+    return this.trace.recent(n).map((e) => ({
+      ...e,
+      text: disassemble((a) => this.m.ram[a & 0xffff], e.pc).text,
+    }));
   }
 
   /** `count` decoded instructions starting at `from`. */

@@ -8,6 +8,7 @@ import { LINES_PER_FRAME, PENS_PER_LINE, CRTC_DEFAULTS } from './constants';
 import { makeBus } from './ports';
 import { renderFrame } from './video';
 import { type RomSet, emptyRomSet, updateRomPaging } from './rom';
+import { setRamConfig } from './banking';
 import { Fdc } from './fdc';
 
 /** Hardware colour 20 in CPC_PALETTE is black; the machine powers up all-black. */
@@ -30,6 +31,12 @@ export interface CPCMachine {
   gaConfig: number;
   ramConfig: number;
   romSelect: number;
+  /** 8 x 16K RAM banks; non-null only with the second 64K on (6128). */
+  banks: Uint8Array | null;
+  /** physical bank (0-7) mirrored in each 16K slot of `ram`. */
+  bankAt: Int8Array;
+  /** true on a 6128 with 128K — RAM-config writes then re-page `ram`. */
+  ram128: boolean;
   /** ROM images. Fixed hardware, not machine state; empty until a ROM PR. */
   roms: RomSet;
   /** ROM currently visible at &0000-&3FFF, or null for RAM. Derived from
@@ -100,6 +107,9 @@ export function makeCPC(): CPCMachine {
     roms: emptyRomSet(),
     romLow: null,
     romHigh: null,
+    banks: null,
+    bankAt: Int8Array.from([0, 1, 2, 3]),
+    ram128: false,
     fdc: new Fdc(),
   } as CPCMachine;
 
@@ -114,7 +124,8 @@ export function makeCPC(): CPCMachine {
     m.mode = 1; m.penSelect = 0; m.crtcSelect = 0; m.kbdLine = 0;
     m.vsync = false; m.frameReady = false;
     m.frameCycles = 0; m.lineCounter = 0; m.interruptCounter = 0; m.frames = 0;
-    m.gaConfig = 0x8d; m.ramConfig = 0; m.romSelect = 0;
+    m.gaConfig = 0x8d; m.romSelect = 0;
+    setRamConfig(m, 0); // config 0: banks 0-3 visible (no-op without 128K)
     m.ppiA = 0; m.ppiB = 0; m.ppiC = 0; m.ppiControl = 0x82;
     m.psgSelect = 0; m.psg.fill(0);
     m.fdc.reset();

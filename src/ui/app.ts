@@ -2,7 +2,7 @@
 // lives in ../z80 and ../cpc; this file only touches the page.
 import { assemble, type AssembleResult } from '../asm';
 import { makeZ80 } from '../z80/cpu';
-import { makeCPC, snapshotSNA, AudioSink, CPC_PALETTE, WIDTH, HEIGHT, Disc } from '../cpc';
+import { makeCPC, snapshotSNA, AudioSink, CPC_PALETTE, WIDTH, HEIGHT, Disc, setExtRam } from '../cpc';
 import { installFirmware, removeFirmware } from '../cpc/roms';
 import { loadFirmwareRoms, type FirmwareRoms, type FirmwareKind } from './firmware';
 import { Sound } from './sound';
@@ -152,6 +152,7 @@ export function startApp(opts: AppOptions = {}): void {
     const booted = roms !== null;
     machine.reset();
     machine.ram.fill(0);
+    setExtRam(machine, machineKind === 'cpc6128');
     if (roms) installFirmware(machine, roms.rom, { amsdos: roms.amsdos });
     else removeFirmware(machine);
     for (let a = result.start; a < result.end; a++) machine.ram[a] = result.bytes[a];
@@ -226,6 +227,8 @@ export function startApp(opts: AppOptions = {}): void {
     need('r-frame').textContent = String(machine.frames);
     need('r-pc').textContent = '&' + cpu.PC.toString(16).toUpperCase().padStart(4, '0');
     need('r-mode').textContent = String(machine.mode);
+    need('r-bank-box').hidden = !machine.ram128;
+    if (machine.ram128) need('r-bank').textContent = Array.from(machine.bankAt).join(' ');
     inksBox.innerHTML = '';
     const shown = machine.mode === 0 ? 16 : machine.mode === 1 ? 4 : 2;
     for (let p = 0; p < shown; p++) {

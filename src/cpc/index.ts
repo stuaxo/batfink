@@ -5,6 +5,7 @@ export type { CPCMachine } from './machine';
 export { makeBus } from './ports';
 export { emptyRomSet, updateRomPaging } from './rom';
 export type { RomSet } from './rom';
+export { setExtRam, setRamConfig, RAM_CONFIGS } from './banking';
 export { Fdc, Disc } from './fdc';
 export type { FdcState } from './fdc';
 export { renderFrame } from './video';

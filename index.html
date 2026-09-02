@@ -135,6 +135,7 @@
           <div><dt>Frame</dt><dd id="r-frame">0</dd></div>
           <div><dt>Program counter</dt><dd id="r-pc">&amp;0000</dd></div>
           <div><dt>Screen mode</dt><dd id="r-mode">1</dd></div>
+          <div id="r-bank-box" hidden><dt>RAM banks</dt><dd id="r-bank">0 1 2 3</dd></div>
           <div><dt>Code size</dt><dd id="r-size">0 bytes</dd></div>
           <div><dt>Inks</dt><dd><div class="inks" id="r-inks"></div></dd></div>
         </dl>
@@ -160,8 +161,8 @@
       Switch <b>Machine</b> to <b>Firmware (464)</b> or <b>(6128)</b> to boot the real OS &mdash;
       BASIC 1.0 or 1.1 &mdash; to a <code>Ready</code> prompt instead. Your assembled code is loaded
       at its <code>org</code> address, so you can <code>CALL</code> it from BASIC. Downloads and the
-      debugger work the same in every mode. (The 6128's extra 64K isn&rsquo;t banked yet, so use it
-      for BASIC 1.1 and code that fits the base 64K.)
+      debugger work the same in every mode. On the 6128 the full 128K is banked
+      (<code>OUT &amp;7Fxx</code>); the readout shows which four RAM banks are visible.
     </p>
     <p>
       In firmware mode a <b>Disc</b> row appears. <b>Mount program</b> puts the current listing on a

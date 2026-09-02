@@ -38,12 +38,11 @@ register blocks. `snapshotSNA` already carries `ramConfig`; extend to SNA v3 for
 
 ---
 
-## Phase A — CPC 6128
+## Phase A — CPC 6128 ✅
 
-Two tiers. Spike done: the 6128 firmware **already boots to `Ready` on the
-current 64K model** — banner, BASIC 1.1, interrupts, mode all fine — and writes
-the RAM-config register exactly once, config 0 (straight mapping, already a
-no-op for us). So:
+Done. The spike found the 6128 firmware boots to `Ready` on the model we already
+had (it writes the RAM-config register once, config 0), so A0 was mostly UI and
+A1 was a contained banking layer.
 
 ### A0 — minimal 6128 ✅
 
@@ -57,14 +56,11 @@ of disc software).
 - `test/integration/emulator/boot-6128.itest.ts` — the 128K banner, `Ready`,
   a BASIC 1.1 program runs.
 
-### A1 — full 128K (~2–4 days on top)
-
-Needed for 128K games, demos, and BASIC that uses the extra banks.
+### A1 — full 128K ✅
 
 1. **RAM banking** (`src/cpc/banking.ts`). The Gate Array RAM-config register
-   (`&7Fxx`, `%11xxxxxx` — the `case 0xc0` branch in `ports.ts`, currently just
-   stored) selects one of 8 configurations for the four 16K logical pages. The
-   standard C3 table:
+   (`&7Fxx`, `%11cccccc` — the `case 0xc0` branch in `ports.ts`) selects one of
+   8 configs (`RAM_CONFIGS`, the standard C3 table) for the four 16K slots:
 
    | cfg | &0000 | &4000 | &8000 | &C000 |
    | --- | --- | --- | --- | --- |
@@ -74,19 +70,27 @@ Needed for 128K games, demos, and BASIC that uses the extra banks.
    | 3 | 0 | 3 | 2 | 7 |
    | 4–7 | 0 | 4–7 | 2 | 3 |
 
-   Bank numbers 0–3 are the base 64K, 4–7 the second 64K. Model: one 128K
-   `Uint8Array` plus a 4-entry offset table recomputed on a config write.
-   `bus.read`/`write` index through it. Config 0 gives `[0, 0x4000, 0x8000,
-   0xC000]` — identical to the 464 today, so a 464 uses the plain path and only
-   a 6128 gets the mapped one. Benchmark the mapped path; expect a few percent.
+   **Chosen model: memcpy on switch.** `m.ram` stays the visible 64K; a config
+   write copies 16K slabs between `m.ram` and `m.banks` (8×16K). Video, the
+   debugger and snapshots read `m.ram` unchanged, and a 464 (`m.ram128 === false`)
+   pays nothing — no per-access indirection. Two-pass (write back all changed
+   slots, then load) so a bank that moves between slots in one switch keeps its
+   latest bytes. `setExtRam(m, on)` allocates/drops `m.banks`; called on a full
+   load in `app.ts` by machine kind. `m.reset()` → config 0.
 
-2. **128K RAM** in `getState`/`setState` and `MachineState`; a bank selector in
-   the memory-as-graphics view and the debugger hex dump for &4000–&7FFF.
+2. **State**. `MachineState` gains `ram128` / `banks` / `bankAt`; `getState`
+   flushes then stores the 128K image (and skips the redundant 64K `ram`);
+   `setState` rebuilds the visible slots. `snapshotSNA` stays 64K — a 128K
+   `.sna` (v3) is a later job. Timeline snapshots are ~135KB each in 6128 mode
+   (vs ~71KB) — acceptable; halve the ring if it bites.
 
-3. **Tests**. `test/cpc/banking.test.ts` — the 8 configs map the right physical
-   bytes, writes land in the mapped bank, a 464 is unaffected.
-   `test/integration/emulator/banking-6128.itest.ts` — from BASIC 1.1, a
-   `|BANKOPEN` / poke sequence writes and reads back the second 64K.
+3. **UI**. The readout shows the four visible bank numbers (`#r-bank`) on a
+   6128. A full inspector for a *hidden* bank is a later nicety.
+
+4. **Tests**. `test/cpc/banking.test.ts` (the 8 configs, writeback, a 464 is
+   untouched, getState round-trip, reset); `banking-6128.itest.ts` — under the
+   real 6128 firmware, `CALL` a routine that banks bank 1 / bank 4 into &4000
+   and proves each keeps its own bytes.
 
 ---
 
@@ -159,9 +163,9 @@ a renderer built for them.
 
 ## Effort
 
-6128: A0 minimal ✅. A1 full 128K ~2–4 days. WebGL renderer + per-µs palette —
-its own project. Plus ~4–8 weeks on top, B1–B6 each roughly a week, B7 a day.
-GX4000 falls out of Plus.
+6128: A0 ✅, A1 ✅ — done. WebGL renderer + per-µs palette — its own project.
+Plus ~4–8 weeks on top, B1–B6 each roughly a week, B7 a day. GX4000 falls out
+of Plus.
 
 ## Sources
 

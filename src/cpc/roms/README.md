@@ -5,6 +5,7 @@ Standard Amstrad CPC firmware images, as shipped with every CPC emulator.
 | File | Size | Contents | sha256 |
 | --- | --- | --- | --- |
 | `cpc464.rom` | 32K | lower 16K = OS 1.0, upper 16K = BASIC 1.0 | `00960d9b…5d37b15e` |
+| `cpc6128.rom` | 32K | lower 16K = OS 3.1, upper 16K = BASIC 1.1 | `31c3668c…b6689562` |
 | `amsdos.rom` | 16K | AMSDOS (DDI-1 disc OS), seen as upper ROM 7 | `ea65e0fb…469fa04d` |
 
 ## Licence

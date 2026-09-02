@@ -45,16 +45,17 @@ current 64K model** — banner, BASIC 1.1, interrupts, mode all fine — and wri
 the RAM-config register exactly once, config 0 (straight mapping, already a
 no-op for us). So:
 
-### A0 — minimal 6128 (~an afternoon)
+### A0 — minimal 6128 ✅
 
 Boots BASIC 1.1; runs anything that stays in the base 64K (most type-ins, a lot
 of disc software).
 
-- Commit `cpc6128.rom` (OS 3.1 + BASIC 1.1, 32K — splits like `cpc464.rom`,
-  `installFirmware` works as-is).
-- `src/ui/firmware.ts` + the Machine select gain **Firmware (6128)** — pick the
-  ROM by kind.
-- A boot test asserting the BASIC 1.1 banner.
+- `src/cpc/roms/cpc6128.rom` committed (OS 3.1 + BASIC 1.1, 32K — splits like
+  `cpc464.rom`, `installFirmware` unchanged).
+- `src/ui/firmware.ts` fetches per `FirmwareKind`; the Machine select is
+  *Bare metal* / *Firmware (464)* / *Firmware (6128)*.
+- `test/integration/emulator/boot-6128.itest.ts` — the 128K banner, `Ready`,
+  a BASIC 1.1 program runs.
 
 ### A1 — full 128K (~2–4 days on top)
 
@@ -158,9 +159,9 @@ a renderer built for them.
 
 ## Effort
 
-6128: A0 minimal ~an afternoon (boots BASIC 1.1), A1 full 128K ~2–4 days.
-WebGL renderer + per-µs palette — its own project. Plus ~4–8 weeks on top,
-B1–B6 each roughly a week, B7 a day. GX4000 falls out of Plus.
+6128: A0 minimal ✅. A1 full 128K ~2–4 days. WebGL renderer + per-µs palette —
+its own project. Plus ~4–8 weeks on top, B1–B6 each roughly a week, B7 a day.
+GX4000 falls out of Plus.
 
 ## Sources
 

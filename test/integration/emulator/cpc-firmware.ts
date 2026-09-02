@@ -7,10 +7,13 @@ import { makeCPC, type CPCMachine } from '../../../src/cpc';
 import { installFirmware } from '../../../src/cpc/roms';
 import { runFrame } from '../../../src/cpc/frame';
 
-export const romPath = fileURLToPath(new URL('../../../src/cpc/roms/cpc464.rom', import.meta.url));
-const amsdosPath = fileURLToPath(new URL('../../../src/cpc/roms/amsdos.rom', import.meta.url));
+const romsDir = fileURLToPath(new URL('../../../src/cpc/roms/', import.meta.url));
+export const romPath = romsDir + 'cpc464.rom';
+const amsdosPath = romsDir + 'amsdos.rom';
 
 export const haveRoms = existsSync(romPath);
+
+export type Kind = 'cpc464' | 'cpc6128';
 
 export interface Firmware {
   m: CPCMachine;
@@ -19,8 +22,8 @@ export interface Firmware {
 }
 
 /** Boot to the BASIC `Ready` prompt (~200 frames). */
-export function bootFirmware(frames = 200): Firmware {
-  const rom = new Uint8Array(readFileSync(romPath));
+export function bootFirmware(frames = 200, kind: Kind = 'cpc464'): Firmware {
+  const rom = new Uint8Array(readFileSync(romsDir + kind + '.rom'));
   const amsdos = existsSync(amsdosPath) ? new Uint8Array(readFileSync(amsdosPath)) : undefined;
   const m = makeCPC();
   const cpu = makeZ80(m.bus);

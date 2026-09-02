@@ -44,7 +44,10 @@ export function makeBus(m: CPCMachine): Bus {
         const fn = (port >> 8) & 3;
         if (fn === 0) m.ppiA = v;
         else if (fn === 1) m.ppiB = v;
-        else if (fn === 2) { m.ppiC = v; m.kbdLine = v & 0x0f; psgStrobe(m); }
+        else if (fn === 2) {
+          m.ppiC = v; m.kbdLine = v & 0x0f; psgStrobe(m);
+          if (m.tape) m.tape.motorOn = (v & 0x10) !== 0; // port C bit 4
+        }
         else if (v & 0x80) m.ppiControl = v;
       } else if ((port & 0x0480) === 0) {
         // Floppy interface (A10=0, A7=0). A8: 0 = motor latch, 1 = FDC.
@@ -61,7 +64,11 @@ export function makeBus(m: CPCMachine): Bus {
       if ((port & 0x0800) === 0) {
         const fn = (port >> 8) & 3;
         if (fn === 0) return m.keys[m.kbdLine] ?? 0xff; // port A: key matrix
-        if (fn === 1) return (m.vsync ? 0x01 : 0x00) | 0x1e; // port B: bit0 = VSYNC
+        if (fn === 1) {
+          // port B: bit0 = VSYNC, bit7 = cassette read
+          const tape = m.tape && m.tape.motorOn && m.tape.level ? 0x80 : 0;
+          return (m.vsync ? 0x01 : 0x00) | 0x1e | tape;
+        }
       }
       return 0xff;
     },

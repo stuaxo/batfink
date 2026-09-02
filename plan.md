@@ -29,8 +29,9 @@ are what's left.
 - Renderer: canvas 2D, palette snapshotted per scanline.
 - Sound: AY-3-8912, synthesised and buffered to Web Audio (Phase 3).
 - Firmware: a Machine switch boots the real 464 or 6128 ROMs to a BASIC `Ready`
-  prompt (128K banked on the 6128); a minimal 765 FDC and a Disc mount control
-  let AMSDOS `CAT` / `RUN"` a `.dsk` in-app (Phase 3). Cassette is still to do.
+  prompt (128K banked on the 6128); a 765 FDC + Disc mount let AMSDOS `CAT` /
+  `RUN"` a `.dsk`, and a Tape mount plays a `.cdt` through the firmware's own
+  `CAS IN` routines (Phase 3).
 - Deployed to GitHub Pages and Cloudflare Workers.
 
 ### Verification
@@ -42,11 +43,11 @@ every SingleStepTests opcode passes on registers, memory and documented flags.
 Remaining gaps are undocumented `YF`/`XF` bits on SCF/CCF, `BIT n,(HL)`,
 `CPI`/`CPD` and `LDIR` — they need a MEMPTR/Q model and are baselined.
 
-`.dsk` now round-trips in-app: `test/integration/emulator/fdc-amsdos.itest.ts`
-mounts one built by `makeDsk` and the real AMSDOS ROM `CAT`s and `RUN"`s it.
-`.cdt` is still only structurally tested — the equivalent check needs the
-firmware tape path ([`plan/cassette.md`](plan/cassette.md)). The Tier C MAME
-cross-check stays designed, not built.
+`.dsk` and `.cdt` both round-trip in-app now:
+`test/integration/emulator/fdc-amsdos.itest.ts` mounts a `makeDsk` image and the
+real AMSDOS ROM `CAT`s and `RUN"`s it; `cassette.itest.ts` plays a `makeCdt`
+image into the firmware's `CAS IN` routines and `RUN""` runs it. The Tier C MAME
+cross-check stays designed, not built — now only really wanted for the renderer.
 
 ## The seams
 
@@ -101,9 +102,9 @@ Small follow-ups are listed under Deferred.
   let AMSDOS `CAT` and `RUN"` a disc — the current listing or a `.dsk` from your
   machine. Plans: [`plan/rom.md`](plan/rom.md),
   [`plan/rom-boot-findings.md`](plan/rom-boot-findings.md).
-- **Cassette `RUN""`** — emulate the bit-banged tape port so an exported `.cdt`
-  loads in-app, the tape equivalent of the disc mount. Not scheduled; design
-  sketch in [`plan/cassette.md`](plan/cassette.md).
+- ✅ **Cassette `RUN""`** — a `Tape` pulse engine feeds PPI port B bit 7; the
+  firmware's own `CAS IN` routines time the edges. A `.cdt` (ours or an external
+  file) mounts next to the disc. [`plan/cassette.md`](plan/cassette.md).
 - **Per-microsecond palette changes** for mid-line colour splits. Needs a finer
   renderer than the per-scanline snapshot. Pairs with the WebGL renderer move
   (see Architecture decisions).

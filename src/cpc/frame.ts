@@ -55,6 +55,7 @@ export function runUntil(cpu: Z80, m: CPCMachine, cond: RunCondition): StopReaso
   const bp = cond.breakpoints;
   const onStep = cond.onStep;
   const audio = cond.audio ? m.audio : null;
+  const tape = m.tape;
   const maxSteps = cond.maxSteps ?? Infinity;
   if (cond.frame) m.frameReady = false;
 
@@ -71,6 +72,7 @@ export function runUntil(cpu: Z80, m: CPCMachine, cond: RunCondition): StopReaso
     const dt = cpu.tstates - before;
     if (onStep) onStep(pc, dt);
     if (audio) audio.step(dt);
+    if (tape) tape.advance(dt);
     advance(cpu, m, dt);
 
     if (cond.frame && m.frameReady) return 'frame';

@@ -72,7 +72,7 @@ Revised order:
 4. ✅ **BASIC shakedown** — PRINT, program entry + RUN, INK/BORDER, SOUND, CALL.
 5. ✅ **Minimal FDC 765** + `.dsk` reader ([`fdc.md`](fdc.md)).
 6. ✅ **Disc mount UI** — `RUN"` an exported `.dsk` or one from disk.
-7. **Cassette via firmware** — not scheduled ([`cassette.md`](cassette.md)).
+7. ✅ **Cassette via firmware** — `RUN""` a `.cdt` ([`cassette.md`](cassette.md)).
 
 PR 3-as-written (a phase of hardware-gap grinding) collapsed into step 4's
 shakedown — it found nothing to fix.

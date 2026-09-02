@@ -49,6 +49,15 @@
           <span id="disc-status">no disc</span>
         </div>
 
+        <div class="disc" id="tape" hidden>
+          <span class="disc-label">Tape</span>
+          <button id="tape-mount-prog" type="button">Mount program</button>
+          <label class="filebtn">Mount .cdt&hellip;<input type="file" id="tape-file" accept=".cdt,.CDT,.tzx,.TZX" hidden></label>
+          <button id="tape-rewind" type="button">Rewind</button>
+          <button id="tape-eject" type="button">Eject</button>
+          <span id="tape-status">no tape</span>
+        </div>
+
         <div class="timeline">
           <button id="tl-live" title="Jump to the latest frame">Live</button>
           <input type="range" id="tl-scrub" min="0" max="0" value="0" aria-label="Timeline">
@@ -165,10 +174,12 @@
       (<code>OUT &amp;7Fxx</code>); the readout shows which four RAM banks are visible.
     </p>
     <p>
-      In firmware mode a <b>Disc</b> row appears. <b>Mount program</b> puts the current listing on a
-      virtual disc in drive A &mdash; then <code>RUN&quot;NAME</code>. <b>Mount .dsk&hellip;</b> loads
-      a disc image from your computer (AMSDOS is emulated, so <code>CAT</code> and <code>RUN&quot;</code>
-      work as on a real machine).
+      In firmware mode <b>Disc</b> and <b>Tape</b> rows appear. <b>Mount program</b> puts the current
+      listing on a virtual disc or cassette; <b>Mount .dsk&hellip;</b> / <b>.cdt&hellip;</b> loads an
+      image from your computer. On disc, <code>CAT</code> and <code>RUN&quot;NAME</code> work through
+      the emulated AMSDOS. On tape, <code>RUN&quot;&quot;</code> and then any key loads the first file,
+      timing the pulses through the firmware just like a real machine (mounting a tape ejects the
+      disc &mdash; one at a time).
     </p>
     <dl>
       <dt>&amp;7F00</dt><dd>Gate Array. Picks an ink, sets its colour, and selects the screen mode.</dd>

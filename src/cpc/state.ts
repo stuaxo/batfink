@@ -7,6 +7,7 @@ import type { CPCMachine } from './machine';
 import { updateRomPaging } from './rom';
 import { flushBanks } from './banking';
 import type { FdcState } from './fdc';
+import type { TapeState } from './tape';
 
 export interface CpuState {
   r: number[];
@@ -57,6 +58,7 @@ export interface MachineState {
   frames: number;
   frameReady: boolean;
   fdc: FdcState;
+  tape: TapeState | null;
 }
 
 /** A deep copy of everything needed to resume exactly where the machine is. */
@@ -99,6 +101,7 @@ export function getState(cpu: Z80, m: CPCMachine): MachineState {
     frames: m.frames,
     frameReady: m.frameReady,
     fdc: m.fdc.getState(),
+    tape: m.tape ? m.tape.getState() : null,
   };
 }
 
@@ -148,6 +151,7 @@ export function setState(cpu: Z80, m: CPCMachine, s: MachineState): void {
   m.frames = s.frames;
   m.frameReady = s.frameReady;
   m.fdc.setState(s.fdc);
+  if (s.tape && m.tape) m.tape.setState(s.tape);
 
   // Re-derive the synth from the restored register file (its tone counters and
   // envelope phase resync within a frame). R13 skipped so the envelope is not

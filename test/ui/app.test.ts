@@ -325,6 +325,32 @@ describe('playground wiring', () => {
     }
   });
 
+  it('the tape controls mount a .cdt and eject it', async () => {
+    await stubRomFetch();
+    vi.stubGlobal('requestAnimationFrame', () => 0);
+    try {
+      boot();
+      const tape = document.getElementById('tape') as HTMLElement;
+      const tapeStatus = document.getElementById('tape-status')!;
+      expect(tape.hidden).toBe(true);
+
+      const sel = document.getElementById('machine') as HTMLSelectElement;
+      sel.value = 'cpc464';
+      sel.dispatchEvent(new Event('change'));
+      await vi.waitFor(() => expect(tape.hidden).toBe(false));
+
+      (document.getElementById('dl-name') as HTMLInputElement).value = 'GAME';
+      document.getElementById('tape-mount-prog')!.dispatchEvent(new Event('click'));
+      expect(tapeStatus.textContent).toMatch(/GAME\.CDT — RUN"" then press a key/);
+
+      document.getElementById('tape-rewind')!.dispatchEvent(new Event('click'));
+      document.getElementById('tape-eject')!.dispatchEvent(new Event('click'));
+      expect(tapeStatus.textContent).toBe('no tape');
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it('shows a RUN" hint when the disc format is chosen', () => {
     boot();
     const fmt = document.getElementById('dl-format') as HTMLSelectElement;

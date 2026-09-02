@@ -16,9 +16,8 @@ Done (PRs 1–6). The spike ([`rom-boot-findings.md`](rom-boot-findings.md))
 settled the open question: the 464 firmware boots to `Ready` on the hardware
 model we already had, with only ROM paging added. BASIC checks out; a minimal
 FDC ([`fdc.md`](fdc.md)) plus a **Disc** mount control in firmware mode let
-AMSDOS `CAT` and `RUN"` a disc — either the current listing or a `.dsk` from the
-user's machine. Cassette is a separate effort and not scheduled —
-[`cassette.md`](cassette.md).
+AMSDOS `CAT` and `RUN"` a disc, and a Tape mount plays a `.cdt` through the
+firmware's `CAS IN` routines — [`cassette.md`](cassette.md).
 
 ## Which machine
 
@@ -140,8 +139,8 @@ Rough; re-plan after the spike.
 6. ✅ **Mount UI** — a **Disc** row in firmware mode: *Mount program* (the
    current listing → a virtual disc in drive A) and *Mount .dsk…* (a file from
    the user's machine), plus *Eject*. `src/ui/app.ts`, `#disc`.
-7. **Cassette via firmware** — `.cdt` `RUN"` through the firmware tape routines.
-   Not scheduled; design sketch in [`cassette.md`](cassette.md).
+7. ✅ **Cassette via firmware** — a `Tape` pulse engine feeds PPI port B bit 7;
+   `RUN""` a `.cdt` through the firmware `CAS IN` routines. [`cassette.md`](cassette.md).
 
 ## Decisions taken
 
@@ -154,8 +153,10 @@ Rough; re-plan after the spike.
 - **Standalone-HTML** still loses the ROMs (they load by `fetch`); a base64
   build variant is deferred until someone wants single-file firmware sharing.
 
-## What's left
+## Outcome
 
-Only cassette ([`cassette.md`](cassette.md)) — not scheduled. Everything through
-PR 6 shipped in roughly the estimated time (PR 2 and PR 4 came in well under —
-the firmware needed no hardware fixes).
+All seven PRs shipped, most well under estimate — the firmware needed no
+hardware fixes, the FDC and the tape engine both worked against the real ROMs on
+the first serious try. `.dsk` and `.cdt` now round-trip in-app, which was the
+main point. Follow-ups if wanted: a 128K `.sna` (v3), Extended `.dsk` /
+protected images, more TZX block types, a full bank/tape inspector.

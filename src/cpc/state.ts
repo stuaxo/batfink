@@ -5,6 +5,7 @@
 import type { Z80 } from '../z80/cpu';
 import type { CPCMachine } from './machine';
 import { updateRomPaging } from './rom';
+import { flushBanks } from './banking';
 import type { FdcState } from './fdc';
 
 export interface CpuState {
@@ -41,6 +42,10 @@ export interface MachineState {
   gaConfig: number;
   ramConfig: number;
   romSelect: number;
+  ram128: boolean;
+  /** full 128K bank image when ram128; null otherwise (`ram` holds the 64K). */
+  banks: Uint8Array | null;
+  bankAt: number[];
   ppiA: number;
   ppiB: number;
   ppiC: number;
@@ -56,6 +61,7 @@ export interface MachineState {
 
 /** A deep copy of everything needed to resume exactly where the machine is. */
 export function getState(cpu: Z80, m: CPCMachine): MachineState {
+  flushBanks(m); // make m.banks a complete 128K image (no-op without 128K)
   return {
     cpu: {
       r: Array.from(cpu.R),
@@ -66,7 +72,9 @@ export function getState(cpu: Z80, m: CPCMachine): MachineState {
       iff1: cpu.IFF1, iff2: cpu.IFF2, im: cpu.IM,
       halted: cpu.halted, tstates: cpu.tstates,
     },
-    ram: m.ram.slice(),
+    // With 128K, `banks` holds everything and `ram` (the visible 64K) is
+    // rebuilt from it on restore — no point copying both.
+    ram: m.ram128 ? new Uint8Array(0) : m.ram.slice(),
     crtc: m.crtc.slice(),
     pens: m.pens.slice(),
     psg: m.psg.slice(),
@@ -80,6 +88,9 @@ export function getState(cpu: Z80, m: CPCMachine): MachineState {
     gaConfig: m.gaConfig,
     ramConfig: m.ramConfig,
     romSelect: m.romSelect,
+    ram128: m.ram128,
+    banks: m.banks ? m.banks.slice() : null,
+    bankAt: Array.from(m.bankAt),
     ppiA: m.ppiA, ppiB: m.ppiB, ppiC: m.ppiC, ppiControl: m.ppiControl,
     psgSelect: m.psgSelect,
     frameCycles: m.frameCycles,
@@ -116,6 +127,18 @@ export function setState(cpu: Z80, m: CPCMachine, s: MachineState): void {
   m.gaConfig = s.gaConfig;
   m.ramConfig = s.ramConfig;
   m.romSelect = s.romSelect;
+  m.ram128 = s.ram128;
+  if (s.ram128 && s.banks) {
+    m.banks ??= new Uint8Array(s.banks.length);
+    m.banks.set(s.banks);
+    m.bankAt.set(s.bankAt);
+    const B = 0x4000;
+    for (let sl = 0; sl < 4; sl++) {
+      m.ram.set(m.banks.subarray(s.bankAt[sl] * B, s.bankAt[sl] * B + B), sl * B);
+    }
+  } else {
+    m.banks = null;
+  }
   updateRomPaging(m); // re-derive romLow/romHigh from the restored config
   m.ppiA = s.ppiA; m.ppiB = s.ppiB; m.ppiC = s.ppiC; m.ppiControl = s.ppiControl;
   m.psgSelect = s.psgSelect;

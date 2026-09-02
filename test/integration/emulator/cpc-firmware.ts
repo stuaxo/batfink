@@ -3,7 +3,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { makeZ80, type Z80 } from '../../../src/z80/cpu';
-import { makeCPC, type CPCMachine } from '../../../src/cpc';
+import { makeCPC, type CPCMachine, setExtRam } from '../../../src/cpc';
 import { installFirmware } from '../../../src/cpc/roms';
 import { runFrame } from '../../../src/cpc/frame';
 
@@ -28,6 +28,7 @@ export function bootFirmware(frames = 200, kind: Kind = 'cpc464'): Firmware {
   const m = makeCPC();
   const cpu = makeZ80(m.bus);
   m.reset();
+  setExtRam(m, kind === 'cpc6128');
   installFirmware(m, rom, { amsdos });
   cpu.reset();
   cpu.PC = 0x0000;

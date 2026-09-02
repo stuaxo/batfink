@@ -29,8 +29,8 @@ are what's left.
 - Renderer: canvas 2D, palette snapshotted per scanline.
 - Sound: AY-3-8912, synthesised and buffered to Web Audio (Phase 3).
 - Firmware: a Machine switch boots the real 464 or 6128 ROMs to a BASIC `Ready`
-  prompt; a minimal 765 FDC and a Disc mount control let AMSDOS `CAT` / `RUN"` a
-  `.dsk` in-app (Phase 3). Cassette and 128K banking are still to do.
+  prompt (128K banked on the 6128); a minimal 765 FDC and a Disc mount control
+  let AMSDOS `CAT` / `RUN"` a `.dsk` in-app (Phase 3). Cassette is still to do.
 - Deployed to GitHub Pages and Cloudflare Workers.
 
 ### Verification
@@ -118,10 +118,10 @@ Small follow-ups are listed under Deferred.
 ## Hardware variants
 
 The 464 is the identity. The Machine switch also offers **Firmware (6128)** —
-BASIC 1.1, base 64K; the extra 64K banking (2–4 days) is not done yet. The
-**Plus / GX4000** ASIC (4096 colours, hardware sprites, raster interrupts, DMA
-sound) is a multi-week, renderer-heavy project best done after the WebGL move.
-Plan: [`plan/hardware-variants.md`](plan/hardware-variants.md).
+BASIC 1.1 with the full 128K banked (`OUT &7Fxx`). The **Plus / GX4000** ASIC
+(4096 colours, hardware sprites, raster interrupts, DMA sound) is a multi-week,
+renderer-heavy project best done after the WebGL move. Plan:
+[`plan/hardware-variants.md`](plan/hardware-variants.md).
 
 ## Assembler track (independent)
 

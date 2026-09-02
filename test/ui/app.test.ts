@@ -282,11 +282,15 @@ describe('playground wiring', () => {
       expect([...sel.options].map((o) => o.value)).toEqual(['bare', 'cpc464', 'cpc6128']);
       const status = () => document.getElementById('status')!.textContent ?? '';
 
+      expect((document.getElementById('r-bank-box') as HTMLElement).hidden).toBe(true);
+
       sel.value = 'cpc6128';
       sel.dispatchEvent(new Event('change'));
       await vi.waitFor(() => expect(status()).toMatch(/Firmware booting/));
       document.getElementById('dbg-step')!.dispatchEvent(new Event('click'));
       expect(document.getElementById('dbg-regs')!.textContent).toMatch(/PC 000[0-9A-F]/);
+      expect((document.getElementById('r-bank-box') as HTMLElement).hidden).toBe(false);
+      expect(document.getElementById('r-bank')!.textContent).toBe('0 1 2 3');
     } finally {
       vi.unstubAllGlobals();
     }

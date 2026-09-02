@@ -7,6 +7,7 @@ import type { Bus } from '../z80/bus';
 import type { CPCMachine } from './machine';
 import { psgStrobe } from './psg';
 import { updateRomPaging } from './rom';
+import { setRamConfig } from './banking';
 
 export function makeBus(m: CPCMachine): Bus {
   return {
@@ -29,7 +30,7 @@ export function makeBus(m: CPCMachine): Bus {
           case 0x00: m.penSelect = (v & 0x10) ? 16 : (v & 0x0f); break;
           case 0x40: m.pens[m.penSelect] = v & 0x1f; break;
           case 0x80: m.mode = v & 0x03; m.gaConfig = v; updateRomPaging(m); break;
-          case 0xc0: m.ramConfig = v; break;
+          case 0xc0: setRamConfig(m, v); break;
         }
       } else if ((port & 0x4000) === 0 && (port & 0x8000) === 0x8000) {
         // 0xBCxx-0xBFxx: CRTC 6845

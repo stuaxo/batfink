@@ -40,7 +40,25 @@ register blocks. `snapshotSNA` already carries `ramConfig`; extend to SNA v3 for
 
 ## Phase A — CPC 6128
 
-Roughly a week. Self-contained.
+Two tiers. Spike done: the 6128 firmware **already boots to `Ready` on the
+current 64K model** — banner, BASIC 1.1, interrupts, mode all fine — and writes
+the RAM-config register exactly once, config 0 (straight mapping, already a
+no-op for us). So:
+
+### A0 — minimal 6128 (~an afternoon)
+
+Boots BASIC 1.1; runs anything that stays in the base 64K (most type-ins, a lot
+of disc software).
+
+- Commit `cpc6128.rom` (OS 3.1 + BASIC 1.1, 32K — splits like `cpc464.rom`,
+  `installFirmware` works as-is).
+- `src/ui/firmware.ts` + the Machine select gain **Firmware (6128)** — pick the
+  ROM by kind.
+- A boot test asserting the BASIC 1.1 banner.
+
+### A1 — full 128K (~2–4 days on top)
+
+Needed for 128K games, demos, and BASIC that uses the extra banks.
 
 1. **RAM banking** (`src/cpc/banking.ts`). The Gate Array RAM-config register
    (`&7Fxx`, `%11xxxxxx` — the `case 0xc0` branch in `ports.ts`, currently just
@@ -61,23 +79,13 @@ Roughly a week. Self-contained.
    0xC000]` — identical to the 464 today, so a 464 uses the plain path and only
    a 6128 gets the mapped one. Benchmark the mapped path; expect a few percent.
 
-2. **ROMs**. Bundle `cpc6128.rom` (OS 3.1 + BASIC 1.1, 32K) next to
-   `cpc464.rom`; AMSDOS is the same file. `src/ui/firmware.ts` and
-   `installFirmware` take the kind. The 6128's drive A is internal — the FDC
-   and `Disc` are unchanged.
+2. **128K RAM** in `getState`/`setState` and `MachineState`; a bank selector in
+   the memory-as-graphics view and the debugger hex dump for &4000–&7FFF.
 
-3. **Reset / power-on**. 6128 boots config 0. BASIC 1.1 `HIMEM` and workspace
-   differ but the firmware sets its own.
-
-4. **UI**. The Machine select gains **Firmware (6128)**. Downloads, debugger,
-   time-travel, the memory views and the Disc mount all work unchanged — the
-   memory view should gain a bank selector for &4000–&7FFF.
-
-5. **Tests**. `test/cpc/banking.test.ts` — the 8 configs map the right physical
+3. **Tests**. `test/cpc/banking.test.ts` — the 8 configs map the right physical
    bytes, writes land in the mapped bank, a 464 is unaffected.
-   `test/integration/emulator/boot-6128.itest.ts` — boots to `Ready`, the
-   BASIC 1.1 banner renders, `MEMORY &4000: ?FRE` shows 128K, a `|BANK`-style
-   poke swaps a page.
+   `test/integration/emulator/banking-6128.itest.ts` — from BASIC 1.1, a
+   `|BANKOPEN` / poke sequence writes and reads back the second 64K.
 
 ---
 
@@ -150,8 +158,9 @@ a renderer built for them.
 
 ## Effort
 
-6128 ~1 week. WebGL renderer + per-µs palette — its own project. Plus ~4–8 weeks
-on top, B1–B6 each roughly a week, B7 a day. GX4000 falls out of Plus.
+6128: A0 minimal ~an afternoon (boots BASIC 1.1), A1 full 128K ~2–4 days.
+WebGL renderer + per-µs palette — its own project. Plus ~4–8 weeks on top,
+B1–B6 each roughly a week, B7 a day. GX4000 falls out of Plus.
 
 ## Sources
 

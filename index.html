@@ -35,7 +35,8 @@
           <label class="machine-pick">Machine
             <select id="machine">
               <option value="bare" selected>Bare metal</option>
-              <option value="firmware">Firmware (464)</option>
+              <option value="cpc464">Firmware (464)</option>
+              <option value="cpc6128">Firmware (6128)</option>
             </select>
           </label>
         </div>
@@ -156,10 +157,11 @@
       to the hardware, which is how demos were actually written.
     </p>
     <p>
-      Switch <b>Machine</b> to <b>Firmware (464)</b> to boot the real OS and BASIC 1.0 to a
-      <code>Ready</code> prompt instead. Your assembled code is loaded at its <code>org</code>
-      address, so you can <code>CALL</code> it from BASIC. Downloads and the debugger work the same
-      in both modes.
+      Switch <b>Machine</b> to <b>Firmware (464)</b> or <b>(6128)</b> to boot the real OS &mdash;
+      BASIC 1.0 or 1.1 &mdash; to a <code>Ready</code> prompt instead. Your assembled code is loaded
+      at its <code>org</code> address, so you can <code>CALL</code> it from BASIC. Downloads and the
+      debugger work the same in every mode. (The 6128's extra 64K isn&rsquo;t banked yet, so use it
+      for BASIC 1.1 and code that fits the base 64K.)
     </p>
     <p>
       In firmware mode a <b>Disc</b> row appears. <b>Mount program</b> puts the current listing on a

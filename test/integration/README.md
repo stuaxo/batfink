@@ -24,6 +24,7 @@ On a bare checkout, `npm run test:integration` passes with everything skipped.
 | `differential/opcode-table.itest.ts` | `rasm` and/or `pasmo` | a generated coverage corpus, byte-compared |
 | `differential/examples-rasm.itest.ts` | `rasm` | every example + the demo, byte-compared |
 | `emulator/firmware-boot.itest.ts` | (ROMs are committed) | CPC 464 firmware boots to `Ready` and takes a keystroke |
+| `emulator/boot-6128.itest.ts` | (ROMs are committed) | CPC 6128 firmware boots to `Ready`; a BASIC 1.1 program runs |
 | `emulator/basic-shakedown.itest.ts` | (ROMs are committed) | BASIC 1.0: PRINT, program + RUN, INK/BORDER, SOUND, CALL |
 | `emulator/fdc-trace.itest.ts` | (ROMs are committed) | records the µPD765 command sequence AMSDOS issues for `CAT` (feeds `plan/fdc.md`) |
 | `emulator/fdc-amsdos.itest.ts` | (ROMs are committed) | real FDC + AMSDOS: `CAT` and `RUN"` a `.dsk` built by `makeDsk` |

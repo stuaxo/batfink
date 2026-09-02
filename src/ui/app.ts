@@ -4,7 +4,7 @@ import { assemble, type AssembleResult } from '../asm';
 import { makeZ80 } from '../z80/cpu';
 import { makeCPC, snapshotSNA, AudioSink, CPC_PALETTE, WIDTH, HEIGHT, Disc } from '../cpc';
 import { installFirmware, removeFirmware } from '../cpc/roms';
-import { loadFirmwareRoms, type FirmwareRoms } from './firmware';
+import { loadFirmwareRoms, type FirmwareRoms, type FirmwareKind } from './firmware';
 import { Sound } from './sound';
 import { Debugger } from '../debug/debugger';
 import { Timeline } from '../debug/timeline';
@@ -77,8 +77,9 @@ export function startApp(opts: AppOptions = {}): void {
   let loadedImage: Uint8Array | null = null; // the code image last written to RAM
   let loadedStart = 0;
   let loadedEnd = 0;
-  let firmware = false;          // bare metal vs the 464 firmware ROMs
+  let machineKind: 'bare' | FirmwareKind = 'bare';
   let firmwareRoms: FirmwareRoms | null = null;
+  const onFirmware = () => machineKind !== 'bare';
 
   const initialSource = sourceFromHash(location.hash) ?? DEMO_SOURCE;
   const editor = makeEditor({
@@ -147,7 +148,7 @@ export function startApp(opts: AppOptions = {}): void {
   /** Reset the machine and load the assembled image. Ends running. In firmware
    *  mode the OS boots from &0000 and the code just sits in RAM for `CALL`. */
   function loadFull(result: AssembleResult): void {
-    const roms = firmware ? firmwareRoms : null;
+    const roms = onFirmware() ? firmwareRoms : null;
     const booted = roms !== null;
     machine.reset();
     machine.ram.fill(0);
@@ -624,22 +625,24 @@ export function startApp(opts: AppOptions = {}): void {
   // --- buttons ---------------------------------------------------
   const machineSel = need<HTMLSelectElement>('machine');
   machineSel.addEventListener('change', async () => {
-    const want = machineSel.value === 'firmware';
-    if (want && !firmwareRoms) {
+    const want = machineSel.value as 'bare' | FirmwareKind;
+    if (want !== 'bare') {
       machineSel.disabled = true;
-      status('Loading firmware ROMs…');
+      status(`Loading ${want === 'cpc6128' ? '6128' : '464'} firmware ROMs…`);
       try {
-        firmwareRoms = await loadFirmwareRoms();
+        firmwareRoms = await loadFirmwareRoms(want);
       } catch {
         status('Could not load the firmware ROMs.');
-        machineSel.value = 'bare';
+        machineSel.value = machineKind;
         machineSel.disabled = false;
         return;
       }
       machineSel.disabled = false;
+    } else {
+      firmwareRoms = null;
     }
-    firmware = want;
-    need('disc').hidden = !firmware;
+    machineKind = want;
+    need('disc').hidden = !onFirmware();
     build();
     paint();
   });

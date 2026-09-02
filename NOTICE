@@ -23,8 +23,9 @@ batfink bundles ported third-party code:
   OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
   SOFTWARE.
 
-- src/cpc/roms/ holds the Amstrad CPC firmware ROM images (OS, BASIC 1.0 and
-  AMSDOS). Copyright Amstrad plc and Locomotive Software. Amstrad has given
+- src/cpc/roms/ holds the Amstrad CPC firmware ROM images (the 464 and 6128
+  OS + BASIC, and AMSDOS). Copyright Amstrad plc and Locomotive Software.
+  Amstrad has given
   permission for the CPC and Spectrum ROMs to be redistributed with emulators
   as long as the copyright message is not altered and the ROMs are provided
   free of charge (Cliff Lawson, on Amstrad's behalf). They are the standard

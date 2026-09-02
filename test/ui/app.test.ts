@@ -37,6 +37,17 @@ function stubCanvas() {
 
 const boot = () => startApp({ createEditor: fakeEditor() });
 
+// Serve the real committed ROM images to the app's fetch(). `?url` asset paths
+// contain the file's basename, so match on that.
+async function stubRomFetch() {
+  const { readFileSync } = await import('node:fs');
+  const dir = process.cwd() + '/src/cpc/roms/';
+  vi.stubGlobal('fetch', async (u: string) => {
+    const name = /amsdos/.test(u) ? 'amsdos.rom' : /6128/.test(u) ? 'cpc6128.rom' : 'cpc464.rom';
+    return { ok: true, arrayBuffer: async () => new Uint8Array(readFileSync(dir + name)).buffer };
+  });
+}
+
 describe('playground wiring', () => {
   beforeEach(() => {
     const body = indexHtml.replace(/[\s\S]*<body>/, '').replace(/<\/body>[\s\S]*/, '').replace(/<script[\s\S]*?<\/script>/g, '');
@@ -238,15 +249,7 @@ describe('playground wiring', () => {
   });
 
   it('the Machine switch boots the firmware and returns to bare metal', async () => {
-    const fs = await import('node:fs');
-    const romsDir = process.cwd() + '/src/cpc/roms/';
-    vi.stubGlobal('fetch', async (u: string) => ({
-      ok: true,
-      arrayBuffer: async () => {
-        const name = u.includes('amsdos') ? 'amsdos.rom' : 'cpc464.rom';
-        return new Uint8Array(fs.readFileSync(romsDir + name)).buffer;
-      },
-    }));
+    await stubRomFetch();
     vi.stubGlobal('requestAnimationFrame', () => 0); // freeze the tick loop
     try {
       boot();
@@ -254,7 +257,7 @@ describe('playground wiring', () => {
       const status = () => document.getElementById('status')!.textContent ?? '';
       const regs = () => document.getElementById('dbg-regs')!.textContent ?? '';
 
-      sel.value = 'firmware';
+      sel.value = 'cpc464';
       sel.dispatchEvent(new Event('change'));
       await vi.waitFor(() => expect(status()).toMatch(/Firmware booting.*CALL &[0-9A-F]{4} from BASIC/));
       document.getElementById('dbg-step')!.dispatchEvent(new Event('click'));
@@ -270,15 +273,27 @@ describe('playground wiring', () => {
     }
   });
 
+  it('offers a 6128 machine that boots too', async () => {
+    await stubRomFetch();
+    vi.stubGlobal('requestAnimationFrame', () => 0);
+    try {
+      boot();
+      const sel = document.getElementById('machine') as HTMLSelectElement;
+      expect([...sel.options].map((o) => o.value)).toEqual(['bare', 'cpc464', 'cpc6128']);
+      const status = () => document.getElementById('status')!.textContent ?? '';
+
+      sel.value = 'cpc6128';
+      sel.dispatchEvent(new Event('change'));
+      await vi.waitFor(() => expect(status()).toMatch(/Firmware booting/));
+      document.getElementById('dbg-step')!.dispatchEvent(new Event('click'));
+      expect(document.getElementById('dbg-regs')!.textContent).toMatch(/PC 000[0-9A-F]/);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it('the disc controls appear in firmware mode and mount the program', async () => {
-    const fs = await import('node:fs');
-    const romsDir = process.cwd() + '/src/cpc/roms/';
-    vi.stubGlobal('fetch', async (u: string) => ({
-      ok: true,
-      arrayBuffer: async () => new Uint8Array(
-        fs.readFileSync(romsDir + (u.includes('amsdos') ? 'amsdos.rom' : 'cpc464.rom')),
-      ).buffer,
-    }));
+    await stubRomFetch();
     vi.stubGlobal('requestAnimationFrame', () => 0);
     try {
       boot();
@@ -287,7 +302,7 @@ describe('playground wiring', () => {
       expect(disc.hidden).toBe(true); // bare metal: no drive
 
       const sel = document.getElementById('machine') as HTMLSelectElement;
-      sel.value = 'firmware';
+      sel.value = 'cpc464';
       sel.dispatchEvent(new Event('change'));
       await vi.waitFor(() => expect(disc.hidden).toBe(false));
 

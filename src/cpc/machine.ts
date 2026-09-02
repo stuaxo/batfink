@@ -10,6 +10,7 @@ import { renderFrame } from './video';
 import { type RomSet, emptyRomSet, updateRomPaging } from './rom';
 import { setRamConfig } from './banking';
 import { Fdc } from './fdc';
+import type { Tape } from './tape';
 
 /** Hardware colour 20 in CPC_PALETTE is black; the machine powers up all-black. */
 const BLACK = 20;
@@ -46,6 +47,8 @@ export interface CPCMachine {
   romHigh: Uint8Array | null;
   /** Floppy controller (DDI-1). Idle and inert until a disc program pokes it. */
   fdc: Fdc;
+  /** Mounted cassette, or null. Feeds PPI port B bit 7 while its motor is on. */
+  tape: Tape | null;
   ppiA: number;
   ppiB: number;
   ppiC: number;
@@ -111,6 +114,7 @@ export function makeCPC(): CPCMachine {
     bankAt: Int8Array.from([0, 1, 2, 3]),
     ram128: false,
     fdc: new Fdc(),
+    tape: null,
   } as CPCMachine;
 
   m.bus = makeBus(m);
@@ -129,6 +133,7 @@ export function makeCPC(): CPCMachine {
     m.ppiA = 0; m.ppiB = 0; m.ppiC = 0; m.ppiControl = 0x82;
     m.psgSelect = 0; m.psg.fill(0);
     m.fdc.reset();
+    if (m.tape) m.tape.motorOn = false;
     updateRomPaging(m);
     m.pens.fill(BLACK);
     m.linePens.fill(BLACK);

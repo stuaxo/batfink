@@ -1,14 +1,19 @@
-# Cassette (`.cdt`) `RUN"`
+# Cassette (`.cdt`) `RUN""`
 
-Not scheduled. This is the design sketch so the knowledge isn't lost, not a
-committed plan. The disc side (see [`rom.md`](rom.md), [`fdc.md`](fdc.md)) is the
-priority for "verified on hardware"; tape is a nice-to-have on top.
+✅ **Built.** `src/cpc/tape.ts` — a `Tape` pulse engine + `readCdt` (TZX
+reader). A `.cdt` mounts next to the disc; `RUN""` plays it through the
+firmware's own `CAS IN` routines. Verified end to end
+(`test/integration/emulator/cassette.itest.ts`) — which also validates
+`src/export/cdt.ts` for the first time.
 
-## What it would unlock
+The trace-based analysis below is what the build was based on.
 
-- `RUN""` an exported `.cdt` in-app — the tape equivalent of the disc mount,
-  closing the last "structurally tested, not run" gap (`src/export/cdt.ts`).
-- Loading real CPC tape images (games, type-ins).
+## What it unlocked
+
+- `RUN""` an exported `.cdt` in-app — the last "structurally tested, not run"
+  gap on `src/export/cdt.ts`, now closed.
+- Loading real CPC tape images (the reader handles the common TZX blocks;
+  our own exports are all 0x11).
 
 ## The hardware
 
@@ -39,63 +44,39 @@ Today `bus.in` for PPI port B returns `(vsync ? 1 : 0) | 0x1e` — bit 7 is alwa
 `&29CD` is the single hook point — everything above it is framing that works
 unmodified once it sees real edges.
 
-## Two approaches
+## How it was built
 
-### 1. Emulate the tape signal (faithful — recommended, mirrors the FDC/audio work)
+The faithful "emulate the tape signal" route (the trap-`&29CD` fallback wasn't
+needed):
 
-Steps:
-
-1. **`src/cpc/tape.ts` — `class Tape`.** A flat `Int32Array` of pulse durations
-   in T-states, a cursor, a countdown, a `level` (0/1), `motorOn`. `advance(dt)`
-   (called from the frame loop like `AudioSink.step`, only while `motorOn`)
-   decrements the countdown and flips `level` at each boundary. `reset()`,
-   `rewind()`.
-2. **`ports.ts`.** `in` port B: OR in `(m.tape?.motorOn ? m.tape.level : 0) << 7`.
-   `out` port C (`fn === 2`): `m.tape?.setMotor((v & 0x10) !== 0)`.
-3. **`frame.ts`.** `if (m.tape) m.tape.advance(dt)` alongside `audio.step(dt)`,
-   behind a `cond.tape` flag / null check — zero cost with no tape, same seam
-   pattern as `m.audio`.
-4. **`machine.ts` / `state.ts`.** `m.tape: Tape | null` (null by default).
-   Snapshot cursor + countdown + level.
-5. **TZX / `.cdt` reader** (`src/cassette/cdt-read.ts`). Inverse of
-   `src/export/cdt.ts`, which already has the CPC pulse-length maths and 0x11
-   layout. Expand blocks to a pulse list:
-   - **0x11 (turbo)** — every one of our own exports. Do this first; it's the
-     whole job for "our `.cdt` round-trips".
-   - 0x10 (standard), 0x12 (tone), 0x13 (pulse seq), 0x14 (pure data),
-     0x20 (pause), 0x2A/0x30/0x32 (stop/text — skip). Add these for real-world
-     images.
-6. **UI.** A **Tape** row by the Disc row (firmware mode): *Mount .cdt…*,
-   *Mount program* (`makeCdt` on the current listing), *Rewind*, *Eject*.
-7. **Two firmware quirks to handle:**
-   - With AMSDOS installed, `RUN"` defaults to disc. The user needs `|TAPE`
-     first (`|` = Shift+@). Give them a **Use tape** button that issues it, or
-     only default to tape when no disc is mounted.
-   - `RUN""` blocks on `Press PLAY then any key:` — feed a synthetic keypress
-     from the mount action so it "just works".
-
-Cost: the engine + wiring ~½ day (small, like `AudioSink`); the 0x11 reader
-~½ day. **~1–2 days for "our `.cdt` round-trips".** Full real-tape-image support
-is the open-ended part (more block types, weird timings) and is not the goal.
-
-### 2. Trap the edge timer (cheap fallback)
-
-Breakpoint `&29CD` and, on hit, walk a decoded bit stream directly: return the
-half-period for the next 0 or 1 (advance registers/flags as the routine would).
-No TZX parser — walk the file's bytes. ~½ day, but bespoke/fast loaders and real
-images won't work. Take this only if the pulse engine proves fiddly; decide from
-a spike, as with the FDC.
+1. **`src/cpc/tape.ts` — `class Tape`.** An `Int32Array` of pulse durations in
+   CPU T-states, a cursor + countdown, a `level` (0/1), `motorOn`. `advance(dt)`
+   (from the frame loop, only while `motorOn`) counts down and flips `level` at
+   each boundary. `rewind()`, `getState`/`setState`.
+2. **`ports.ts`.** `in` port B ORs in `level << 7`; `out` port C (`fn === 2`)
+   sets `motorOn` from bit 4.
+3. **`frame.ts`.** `if (tape) tape.advance(dt)` beside `audio.step(dt)` — a null
+   check, zero cost with no tape.
+4. **`machine.ts` / `state.ts`.** `m.tape: Tape | null`; the cursor is
+   snapshotted (the pulse list is fixed, like a ROM).
+5. **`readCdt`** (in `tape.ts`). Parses the TZX container to a pulse list,
+   converting TZX (3.5 MHz) pulse lengths to CPU T-states. Blocks: 0x10, 0x11
+   (what `makeCdt` writes), 0x12, 0x13, 0x14, 0x20, and skips 0x30/0x32/0x33/
+   0x35. Unknown blocks throw.
+6. **UI.** A **Tape** row (firmware mode): *Mount .cdt…*, *Mount program*
+   (`makeCdt`), *Rewind*, *Eject*.
+7. **The AMSDOS quirk.** `RUN"` defaults to disc when AMSDOS is loaded, so
+   mounting a tape boots the firmware *without* AMSDOS (and ejects any disc) —
+   one medium at a time. The user still presses a key at `Press PLAY then any
+   key:` (the status line says so).
 
 ## Verification
 
-- `test/cpc/tape.test.ts` — the pulse engine's timing, and TZX 0x11 → pulses
-  (round-trip against `src/export/cdt.ts`).
+- `test/cpc/tape.test.ts` — the pulse engine's timing/rewind/snapshot, and
+  `readCdt` on a `makeCdt` image and on metadata-only blocks.
 - `test/integration/emulator/cassette.itest.ts` — mount a `makeCdt` image,
-  `|TAPE`, `RUN""`, feed a keypress, run frames, assert the program took the
-  screen. Mirrors `fdc-amsdos.itest.ts`.
-
-The trace spike this doc is based on is already done (see "What the firmware
-does"); the read routine at `&2919`/`&29CD` and the port bits are known.
+  `RUN""`, press a key, and the loaded program takes the screen; a blank tape
+  doesn't hang or falsely succeed.
 
 ## Sources
 

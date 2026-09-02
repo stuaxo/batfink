@@ -8,6 +8,8 @@ export type { RomSet } from './rom';
 export { setExtRam, setRamConfig, RAM_CONFIGS } from './banking';
 export { Fdc, Disc } from './fdc';
 export type { FdcState } from './fdc';
+export { Tape, readCdt } from './tape';
+export type { TapeState } from './tape';
 export { renderFrame } from './video';
 export { runFrame, runUntil } from './frame';
 export type { RunCondition, StopReason } from './frame';

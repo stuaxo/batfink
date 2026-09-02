@@ -2,7 +2,7 @@
 // lives in ../z80 and ../cpc; this file only touches the page.
 import { assemble, type AssembleResult } from '../asm';
 import { makeZ80 } from '../z80/cpu';
-import { makeCPC, snapshotSNA, AudioSink, CPC_PALETTE, WIDTH, HEIGHT, Disc, setExtRam } from '../cpc';
+import { makeCPC, snapshotSNA, AudioSink, CPC_PALETTE, WIDTH, HEIGHT, Disc, Tape, readCdt, setExtRam } from '../cpc';
 import { installFirmware, removeFirmware } from '../cpc/roms';
 import { loadFirmwareRoms, type FirmwareRoms, type FirmwareKind } from './firmware';
 import { Sound } from './sound';
@@ -153,8 +153,12 @@ export function startApp(opts: AppOptions = {}): void {
     machine.reset();
     machine.ram.fill(0);
     setExtRam(machine, machineKind === 'cpc6128');
-    if (roms) installFirmware(machine, roms.rom, { amsdos: roms.amsdos });
-    else removeFirmware(machine);
+    if (roms) {
+      // With a tape in the deck, boot without AMSDOS so RUN" goes to cassette.
+      installFirmware(machine, roms.rom, { amsdos: machine.tape ? undefined : roms.amsdos });
+    } else {
+      removeFirmware(machine);
+    }
     for (let a = result.start; a < result.end; a++) machine.ram[a] = result.bytes[a];
     cpu.reset();
     const entry = entryOf(result);
@@ -646,6 +650,7 @@ export function startApp(opts: AppOptions = {}): void {
     }
     machineKind = want;
     need('disc').hidden = !onFirmware();
+    need('tape').hidden = !onFirmware();
     build();
     paint();
   });
@@ -684,6 +689,52 @@ export function startApp(opts: AppOptions = {}): void {
     machine.fdc.drives[0] = null;
     need('disc-status').textContent = 'no disc';
     status('Ejected the disc.');
+  });
+
+  // --- cassette --------------------------------------------------
+  function mountTape(image: Uint8Array, label: string): void {
+    let tape: Tape;
+    try {
+      tape = new Tape(readCdt(image));
+    } catch {
+      status(`${label} is not a .cdt / .tzx image.`);
+      return;
+    }
+    machine.tape = tape;
+    machine.fdc.drives[0] = null; // one medium at a time
+    need('disc-status').textContent = 'no disc';
+    need('tape-status').textContent = `${label} — RUN"" then press a key`;
+    build(); // reboot without AMSDOS so RUN" reads the tape
+    paint();
+  }
+
+  need('tape-mount-prog').addEventListener('click', () => {
+    const code = assembledBytes();
+    if (!code) { status('Assemble something first.'); return; }
+    const { name, loadAddr, entryAddr } = programMeta();
+    mountTape(makeCdt(code, { filename: name, loadAddr, entryAddr }), `${name}.CDT`);
+  });
+
+  need<HTMLInputElement>('tape-file').addEventListener('change', async (e) => {
+    const input = e.target as HTMLInputElement;
+    const file = input.files?.[0];
+    input.value = '';
+    if (!file) return;
+    mountTape(new Uint8Array(await file.arrayBuffer()), file.name);
+  });
+
+  need('tape-rewind').addEventListener('click', () => {
+    machine.tape?.rewind();
+    status('Rewound the tape.');
+  });
+
+  need('tape-eject').addEventListener('click', () => {
+    if (!machine.tape) return;
+    machine.tape = null;
+    need('tape-status').textContent = 'no tape';
+    status('Ejected the tape.');
+    build();
+    paint();
   });
 
   need('assemble').addEventListener('click', () => { build(); paint(); });

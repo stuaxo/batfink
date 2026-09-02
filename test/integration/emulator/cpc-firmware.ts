@@ -21,10 +21,12 @@ export interface Firmware {
   lowerRom: Uint8Array;
 }
 
-/** Boot to the BASIC `Ready` prompt (~200 frames). */
-export function bootFirmware(frames = 200, kind: Kind = 'cpc464'): Firmware {
+/** Boot to the BASIC `Ready` prompt (~200 frames). Pass `withAmsdos = false`
+ *  for a tape-only machine (RUN"" then goes to cassette). */
+export function bootFirmware(frames = 200, kind: Kind = 'cpc464', withAmsdos = true): Firmware {
   const rom = new Uint8Array(readFileSync(romsDir + kind + '.rom'));
-  const amsdos = existsSync(amsdosPath) ? new Uint8Array(readFileSync(amsdosPath)) : undefined;
+  const amsdos = withAmsdos && existsSync(amsdosPath)
+    ? new Uint8Array(readFileSync(amsdosPath)) : undefined;
   const m = makeCPC();
   const cpu = makeZ80(m.bus);
   m.reset();

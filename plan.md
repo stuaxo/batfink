@@ -117,11 +117,12 @@ Small follow-ups are listed under Deferred.
 
 ## Hardware variants
 
-The 464 is the identity. Also running **6128** (128K, BASIC 1.1 — a week's work,
-high return) and the **Plus / GX4000** ASIC (4096 colours, hardware sprites,
-raster interrupts, DMA sound — a multi-week, renderer-heavy project best done
-after the WebGL move). Sketch: [`plan/hardware-variants.md`](plan/hardware-variants.md).
-Not scheduled.
+The 464 is the identity. Also running **6128** — the firmware already boots to
+`Ready` on the current model, so minimal BASIC 1.1 support is an afternoon and
+full 128K banking is 2–4 days on top — and the **Plus / GX4000** ASIC (4096
+colours, hardware sprites, raster interrupts, DMA sound — a multi-week,
+renderer-heavy project best done after the WebGL move). Sketch:
+[`plan/hardware-variants.md`](plan/hardware-variants.md). Not scheduled.
 
 ## Assembler track (independent)
 

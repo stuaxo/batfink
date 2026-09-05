@@ -1,21 +1,17 @@
-; Polka -- a flat grid of dots on cloth, filling the screen.
-; Mode 0. A staggered grid of filled circles is drawn ONCE at start-up,
-; each in one of inks 1-8 (a tight warm ramp). The dots run off all four
-; edges so the pattern looks like it carries on past the screen, and the
-; raster paints the border the same colour as the picture -- so there is
-; no black frame, without a real overscan screen. The grid never moves.
-; The animation is all palette:
-;   * the interrupt runs a raster the full height, ink 0 rewritten every
-;     few scanlines from a sine gradient -- a smooth blue wash over the
-;     whole display, border included -- and it scrolls, so light seems to
-;     play over folds of cloth;
-;   * the dot ramp rotates one step at a time, so warm colour drifts
-;     diagonally across the grid.
-; The dot pixels are never ink 0, so the wash flows behind them.
+; Polka -- a grid of dots on cloth, filling the screen.
+; Mode 1, four inks: white paper and three blues. A staggered grid of
+; circles is drawn once at start-up; each row's left and right edges are
+; masked to the pixel, so the dots stay round at this resolution. They
+; run off every edge and the raster paints the border the paper colour,
+; so there is no black frame. The animation is all palette:
+;   * the interrupt runs a raster the full height, paper rewritten every
+;     few scanlines from a gradient -- a soft wash of light over the
+;     cloth -- and it scrolls;
+;   * the three dot inks rotate through a blue ramp one step at a time,
+;     so colour drifts diagonally across the grid.
 
 GA     equ &7F00
 PPI_B  equ &F500
-SCREEN equ &C000
 RAD    equ 20              ; dot vertical radius, scanlines
 STEPS  equ 8               ; raster changes per band (6 bands cover the frame)
 DELAY  equ 95              ; inner delay between them, ~one band / STEPS
@@ -50,16 +46,20 @@ clr1:  push hl
        ld (&0039),hl
 
        ld bc,GA
-       ld a,&8C                  ; mode 0, both ROMs paged out
+       ld a,&8D                  ; mode 1, both ROMs paged out
+       out (c),a
+       xor a                     ; pen 0 = paper, until the raster runs
+       out (c),a
+       ld a,&4B
        out (c),a
 
-       call setwarm             ; pens 1-8 = the warm ramp
+       call setwarm             ; pens 1-3 = the blue ramp
        call drawdots
        ei
 
 ; ---------------------------------------------------------------------
 ; Main loop. The rasters live in the interrupt; here we just nudge the
-; three slow phases, each on its own divider.
+; two slow phases, each on its own divider.
 ; ---------------------------------------------------------------------
 main:  call waitvsync
        ld a,5                  ; re-phase: next interrupt is band 0, at the top
@@ -120,7 +120,7 @@ irqs:  ld a,(gidx)
        ld a,(hl)
        ld bc,GA
        ld e,a
-       out (c),c                 ; ink 0
+       out (c),c                 ; pen 0 (paper)
        out (c),a
        ld a,&10                  ; border
        out (c),a
@@ -142,7 +142,7 @@ irqd:  dec a
        ret
 
 ; ---------------------------------------------------------------------
-; Pens 1-8 from warm[], rotated by phase.
+; Pens 1-3 from warm[], rotated by phase.
 ; ---------------------------------------------------------------------
 setwarm:
        ld a,1
@@ -151,7 +151,7 @@ sw1:   ld a,(phase)
        ld hl,cpn
        add a,(hl)
        dec a
-       and 7                     ; index into warm[], mod 8 (a power of two)
+       and 3                     ; index into warm[], mod 4 (a power of two)
        ld e,a
        ld d,0
        ld hl,warm
@@ -166,7 +166,7 @@ sw1:   ld a,(phase)
        ld hl,cpn
        inc (hl)
        ld a,(hl)
-       cp 9
+       cp 4
        jr c,sw1
        ret
 
@@ -182,11 +182,11 @@ wv2:   in a,(c)
        ret
 
 ; ---------------------------------------------------------------------
-; Dots. Each record: centre x (pixels), centre y (line), pen.
+; Dots. Each record: centre x (in 2-pixel units), centre y (line), pen.
 ; ---------------------------------------------------------------------
 drawdots:
        ld ix,dots
-       ld b,23
+       ld b,28
 dd1:   push bc
        ld a,(ix+0)
        ld (dcx),a
@@ -240,6 +240,8 @@ dt2:   push bc
        djnz dt2
        ret
 
+; One scanline of the current dot. Left and right ends are masked to the
+; pixel; the bytes between are solid.
 dotrow:
        ld a,(dline)
        cp 200
@@ -253,28 +255,113 @@ dotrow:
        ld a,(hl)
        or a
        ret z
-       ld c,a
+       ld c,a                    ; c = half-width, pixels
+
        ld a,(dcx)
+       add a,a
+       ld l,a
+       ld a,0
+       adc a,0
+       ld h,a                    ; hl = centre pixel (0..320)
+
+       ld a,l                    ; left = centre - c, clamped to 0
        sub c
-       jr nc,dr0
+       ld e,a
+       ld a,h
+       sbc a,0
+       jr nc,dro0
        xor a
-dr0:   srl a
-       ld (curx),a
-       ld d,a
-       ld a,(dcx)
+       ld e,a
+dro0:  ld d,a                    ; de = left pixel
+
+       ld a,l                    ; right = centre + c, clamped to 319
        add a,c
-       srl a
-       cp 80
-       jr c,dr1
-       ld a,79
-dr1:   sub d
-       inc a
-       ld (drcnt),a
-       call scraddr
-       ld bc,(fillbyte)          ; C = fill byte, B = run length (adjacent vars)
-dr2:   ld (hl),c
+       ld l,a
+       ld a,h
+       adc a,0
+       ld h,a
+       cp 1
+       jr c,dro1
+       jr nz,dro2
+       ld a,l
+       cp &40
+       jr c,dro1
+dro2:  ld hl,319
+dro1:
+       ld a,e                    ; split left into byte + pixel
+       and 3
+       ld (lsub),a
+       srl d
+       rr e
+       srl d
+       rr e
+       ld a,e
+       ld (curx),a               ; left byte
+
+       ld a,l                    ; split right into byte + pixel
+       and 3
+       ld (rsub),a
+       srl h
+       rr l
+       srl h
+       rr l
+       ld a,l                    ; right byte
+       ld hl,curx
+       sub (hl)
+       ld (midc),a               ; right byte - left byte
+
+       ld a,(lsub)
+       ld l,a
+       ld h,0
+       ld de,nleftmask
+       add hl,de
+       ld a,(hl)
+       ld (nmL),a
+       ld a,(rsub)
+       ld l,a
+       ld h,0
+       ld de,nrightmask
+       add hl,de
+       ld a,(hl)
+       ld (nmR),a
+
+       call scraddr              ; hl = left byte address
+       ld a,(midc)
+       or a
+       jr nz,drm
+
+       ld a,(nmL)                ; single byte: keep both fringes
+       ld b,a
+       ld a,(nmR)
+       or b
+       jp rmw
+
+drm:   ld a,(nmL)
+       call rmw
        inc hl
-       djnz dr2
+       ld a,(midc)
+       dec a
+       jr z,drr
+       ld b,a
+       ld a,(fillbyte)
+drmid: ld (hl),a
+       inc hl
+       djnz drmid
+drr:   ld a,(nmR)
+       jp rmw
+
+; HL -> screen byte, A = keep mask. Byte becomes (old & keep) | (fill & ~keep).
+rmw:   ld b,a
+       ld a,(hl)
+       and b
+       ld c,a
+       ld a,b
+       cpl
+       ld b,a
+       ld a,(fillbyte)
+       and b
+       or c
+       ld (hl),a
        ret
 
 ; curx (bytes), cury (line) -> HL. Layout is mode-independent: eight
@@ -317,32 +404,39 @@ scraddr:
 ; ---------------------------------------------------------------------
 ; Data
 ; ---------------------------------------------------------------------
-; Solid mode-0 byte (both pixels one pen) for pens 0-8 -- all we use.
-solidtab: db &00,&C0,&0C,&CC,&30,&F0,&3C,&FC,&03
+; Solid mode-1 byte (all four pixels one pen) for pens 0-3.
+solidtab: db &00,&F0,&0F,&FF
 
-hwtab:    db 10,10,10,10,10,9,9,9,8,8,8,7,7,6,6,5,5,4,3,2,0
+; Circle half-width per row, in pixels, stretched 1.2x for the mode-1
+; pixel aspect (pixels are taller than wide) so the dots read as round.
+hwtab:    db 23,23,23,22,22,22,22,21,21,20,19,19,18,17,16,14,13,11,8,0,0
 
-; Warm ramp, &40+n: white, pastel yellow, bright yellow, orange,
-; bright red, bright magenta, pink, pastel magenta -- loops smoothly.
-warm:     db &5B,&43,&5A,&4E,&4C,&4D,&47,&4F
+; Pixels to KEEP (not fill) in the left / right fringe byte, indexed by
+; the sub-pixel where the run starts / ends.
+nleftmask:  db &00,&88,&CC,&EE
+nrightmask: db &77,&33,&11,&00
 
-; The backdrop wash, &40+n: one fold through four blues -- shadow (blue)
-; to crest (pastel) and back, all cloth, never black. 32 samples, ~1.5
-; folds down the screen, scrolled by grphase.
-grad:     db &44,&44,&44,&44,&44,&44,&44,&44,&55,&55,&57,&57
-          db &5F,&5F,&5F,&5F,&5F,&5F,&5F,&5F,&57,&57,&55,&55
-          db &44,&44,&44,&44,&44,&44,&44,&44
+; The three dot inks, GA slots: blue, bright blue, sky blue, bright blue
+; -- a short there-and-back ramp, so the rotation reads as a soft wave.
+warm:     db &44,&55,&57,&55
+
+; The paper wash, GA slots: bright white with two soft swells of pastel
+; cyan -- a moving sheen, low contrast, never dark. 32 samples, scrolled
+; by grphase.
+grad:     db &4B,&4B,&4B,&4B,&49,&49,&49,&49,&49,&4B,&4B,&4B,&4B,&4B,&4B,&4B
+          db &4B,&4B,&4B,&49,&49,&49,&49,&4B,&4B,&4B,&4B,&4B,&4B,&4B,&4B,&4B
 
 ; Start index into grad[] for each band (band * STEPS mod 32).
 barbase:  db 0,8,16,24,0,8
 
 ; Staggered grid that runs off every edge, pens spread on a diagonal so
-; the ramp rotation reads as a wave. Each record: centre x, centre y, pen.
-dots:     db   8,  0, 1,   46,  0, 4,   84,  0, 7,  122,  0, 2,  154,  0, 5
-          db  27, 50, 4,   65, 50, 6,  103, 50, 8,  141, 50, 2
-          db   8,100, 7,   46,100, 1,   84,100, 3,  122,100, 5,  154,100, 7
-          db  27,150, 2,   65,150, 4,  103,150, 6,  141,150, 8
-          db   8,200, 5,   46,200, 8,   84,200, 2,  122,200, 6,  154,200, 1
+; the ramp rotation reads as a wave. Record: centre x (2-pixel units),
+; centre y, pen.
+dots:     db   0,  0,1,  32,  0,2,  64,  0,3,  96,  0,1, 128,  0,2, 160,  0,3
+          db  16, 50,2,  48, 50,3,  80, 50,1, 112, 50,2, 144, 50,3
+          db   0,100,3,  32,100,1,  64,100,2,  96,100,3, 128,100,1, 160,100,2
+          db  16,150,1,  48,150,2,  80,150,3, 112,150,1, 144,150,2
+          db   0,200,2,  32,200,3,  64,200,1,  96,200,2, 128,200,3, 160,200,1
 
 phase:    db 0
 cctick:   db 0
@@ -357,7 +451,11 @@ dcx:      db 0
 dcy:      db 0
 dline:    db 0                    ; dline then dady -- dot() steps both via one HL
 dady:     db 0
-fillbyte: db 0                    ; fillbyte then drcnt -- ld bc,(fillbyte)
-drcnt:    db 0
+fillbyte: db 0
+lsub:     db 0
+rsub:     db 0
+midc:     db 0
+nmL:      db 0
+nmR:      db 0
 curx:     db 0
 cury:     db 0

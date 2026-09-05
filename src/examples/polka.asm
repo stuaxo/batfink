@@ -34,52 +34,65 @@ start: di
        ei
 
 ; ---------------------------------------------------------------------
-; Main loop: 50Hz, palette only.
+; Main loop: 50Hz, palette only. Everything steps on a slow divider so
+; the motion stays gentle rather than strobing.
 ; ---------------------------------------------------------------------
 main:  call waitvsync
        ld a,4
        ld (barpos),a             ; re-phase the interrupt counter
 
-; The sway goes first, during blanking: CRTC R13 shifts the fetch start,
-; so the whole field slides. A mid-frame change here would tear.
-       ld hl,sinetab
+; --- sway: CRTC R13 shifts the fetch start. Do it here, during blanking
+;     -- a mid-frame change would tear. Step swphase every 8 frames.
+       ld hl,swtick
+       inc (hl)
+       ld a,(hl)
+       cp 8
+       jr c,sw0
+       ld (hl),0
+       ld hl,swphase
+       inc (hl)
+       ld a,(hl)
+       and 15
+       ld (hl),a
+sw0:   ld hl,sinetab
        ld a,(swphase)
        ld e,a
        ld d,0
        add hl,de
        ld a,(hl)
-       ld bc,&BC0D               ; CRTC R13 = display start, low byte
+       ld bc,&BC0D
        out (c),c
        ld b,&BD
        out (c),a
 
-       ld a,(phase)              ; step the dot palette
-       inc a
+; --- colour cycle: rotate inks 1-15 one step every 10 frames.
+       ld hl,cctick
+       inc (hl)
+       ld a,(hl)
+       cp 10
+       jr c,bg
+       ld (hl),0
+       ld hl,phase
+       inc (hl)
+       ld a,(hl)
        cp 15
-       jr c,ph0
+       jr c,cc0
        xor a
-ph0:   ld (phase),a
-       call cyclepens
+       ld (hl),a
+cc0:   call cyclepens
 
-       ld a,(bgtick)             ; every 4th frame, drift the bands down
-       inc a
-       ld (bgtick),a
-       and 3
-       jr nz,sw
-       ld a,(bgphase)
-       inc a
+; --- band drift: move the ink-0 bands down one step every 18 frames.
+bg:    ld hl,bgtick
+       inc (hl)
+       ld a,(hl)
+       cp 18
+       jr c,main
+       ld (hl),0
+       ld hl,bgphase
+       inc (hl)
+       ld a,(hl)
        and 7
-       ld (bgphase),a
-
-sw:    ld a,(swtick)             ; every other frame, step the sway
-       inc a
-       ld (swtick),a
-       and 1
-       jr nz,main
-       ld a,(swphase)
-       inc a
-       and 15
-       ld (swphase),a
+       ld (hl),a
        jr main
 
 ; ---------------------------------------------------------------------
@@ -347,6 +360,7 @@ dots:     db  20, 26, 1,   50, 26, 3,   80, 26, 5,  110, 26, 7,  140, 26, 9
           db  35,176,10,   65,176,12,   95,176,14,  125,176, 1
 
 phase:    db 0
+cctick:   db 0
 bgphase:  db 0
 bgtick:   db 0
 swphase:  db 0

@@ -23,6 +23,25 @@ DELAY  equ 95              ; inner delay between them, ~one band / STEPS
        org &4000
 
 start: di
+
+; Clear 16K by pushing zeros -- ~3x faster than LDIR, so the screen is
+; up in about one frame instead of four. Done first, while SP is free.
+       ld hl,0
+       ld sp,0                   ; push wraps down from &0000 through &C000..&FFFF
+       ld c,4
+clr0:  ld b,0
+clr1:  push hl
+       push hl
+       push hl
+       push hl
+       push hl
+       push hl
+       push hl
+       push hl
+       djnz clr1
+       dec c
+       jr nz,clr0
+
        ld sp,&BFF0
        im 1
        ld a,&C3
@@ -34,7 +53,6 @@ start: di
        ld a,&8C                  ; mode 0, both ROMs paged out
        out (c),a
 
-       call cls
        call setwarm             ; pens 1-8 = the warm ramp
        call drawdots
        ei
@@ -47,7 +65,8 @@ main:  call waitvsync
        ld a,5                  ; re-phase: next interrupt is band 0, at the top
        ld (barpos),a
 
-; --- sway: CRTC R13, during blanking. Step every 8 frames.
+; --- sway: CRTC R13, during blanking. Step swphase every 8 frames; it
+;     is masked where it's used, so it just runs.
        ld hl,swtick
        inc (hl)
        ld a,(hl)
@@ -56,13 +75,11 @@ main:  call waitvsync
        ld (hl),0
        ld hl,swphase
        inc (hl)
-       ld a,(hl)
+sw0:   ld a,(swphase)
        and 15
-       ld (hl),a
-sw0:   ld hl,sinetab
-       ld a,(swphase)
        ld e,a
        ld d,0
+       ld hl,sinetab
        add hl,de
        ld a,(hl)
        ld bc,&BC0D
@@ -79,12 +96,7 @@ sw0:   ld hl,sinetab
        ld (hl),0
        ld hl,phase
        inc (hl)
-       ld a,(hl)
-       cp 8
-       jr c,cc0
-       xor a
-       ld (hl),a
-cc0:   call setwarm
+       call setwarm
 
 ; --- gradient scroll: one step every 5 frames.
 gr:    ld hl,grtick
@@ -95,10 +107,6 @@ gr:    ld hl,grtick
        ld (hl),0
        ld hl,grphase
        inc (hl)
-       ld a,(hl)
-       cp 24
-       jr c,main
-       ld (hl),0
        jr main
 
 ; ---------------------------------------------------------------------
@@ -126,11 +134,8 @@ irq0:  ld (barpos),a
        ld a,STEPS
        ld (stepc),a
 irqs:  ld a,(gidx)
-irqn:  cp 24
-       jr c,irqm
-       sub 24
-       jr irqn
-irqm:  ld l,a
+       and 31                    ; grad[] is 32 long -- mask, don't loop
+       ld l,a
        ld h,0
        ld de,grad
        add hl,de
@@ -168,11 +173,8 @@ sw1:   ld a,(phase)
        ld hl,cpn
        add a,(hl)
        dec a
-sw2:   cp 8
-       jr c,sw3
-       sub 8
-       jr sw2
-sw3:   ld e,a
+       and 7                     ; index into warm[], mod 8 (a power of two)
+       ld e,a
        ld d,0
        ld hl,warm
        add hl,de
@@ -199,13 +201,6 @@ wv1:   in a,(c)
 wv2:   in a,(c)
        rra
        jr nc,wv2
-       ret
-
-cls:   ld hl,SCREEN
-       ld de,SCREEN+1
-       ld bc,&3FFF
-       ld (hl),0
-       ldir
        ret
 
 ; ---------------------------------------------------------------------
@@ -246,7 +241,7 @@ dt1:   push bc
        call dotrow
        ld hl,dline
        inc (hl)
-       ld hl,dady
+       inc hl                    ; -> dady
        dec (hl)
        pop bc
        djnz dt1
@@ -261,7 +256,7 @@ dt2:   push bc
        call dotrow
        ld hl,dline
        inc (hl)
-       ld hl,dady
+       inc hl                    ; -> dady
        inc (hl)
        pop bc
        djnz dt2
@@ -298,10 +293,7 @@ dr1:   sub d
        inc a
        ld (drcnt),a
        call scraddr
-       ld a,(fillbyte)
-       ld c,a
-       ld a,(drcnt)
-       ld b,a
+       ld bc,(fillbyte)          ; C = fill byte, B = run length (adjacent vars)
 dr2:   ld (hl),c
        inc hl
        djnz dr2
@@ -347,9 +339,10 @@ scraddr:
 ; ---------------------------------------------------------------------
 ; Data
 ; ---------------------------------------------------------------------
-solidtab: db &00,&C0,&0C,&CC,&30,&F0,&3C,&FC,&03,&C3,&0F,&CF,&33,&F3,&3F,&FF
+; Solid mode-0 byte (both pixels one pen) for pens 0-8 -- all we use.
+solidtab: db &00,&C0,&0C,&CC,&30,&F0,&3C,&FC,&03
 
-hwtab:    db 10,10,10,10,10,10,10,9,9,9,9,8,8,8,7,7,6,5,4,3,0
+hwtab:    db 10,10,10,10,10,9,9,9,8,8,8,7,7,6,6,5,5,4,3,2,0
 
 sinetab:  db 0,0,0,1,1,2,2,2,2,2,1,1,1,0,0,0
 
@@ -357,14 +350,15 @@ sinetab:  db 0,0,0,1,1,2,2,2,2,2,1,1,1,0,0,0
 ; bright red, bright magenta, pink, pastel magenta -- loops smoothly.
 warm:     db &5B,&43,&5A,&4E,&4C,&4D,&47,&4F
 
-; The backdrop wash, &40+n: a sine over four blues (blue, bright blue,
-; sky, pastel) -- fold shadow to crest highlight, all cloth, never black.
-; 24 samples, loops.
-grad:     db &55,&57,&5F,&5F,&5F,&5F,&5F,&57,&57,&55,&44,&44
-          db &44,&44,&44,&55,&57,&57,&5F,&5F,&5F,&5F,&5F,&57
+; The backdrop wash, &40+n: one fold through four blues -- shadow (blue)
+; to crest (pastel) and back, all cloth, never black. 32 samples, ~1.5
+; folds down the screen, scrolled by grphase.
+grad:     db &44,&44,&44,&44,&44,&44,&44,&44,&55,&55,&57,&57
+          db &5F,&5F,&5F,&5F,&5F,&5F,&5F,&5F,&57,&57,&55,&55
+          db &44,&44,&44,&44,&44,&44,&44,&44
 
-; Start index into grad[] for each of the six bands (band * STEPS mod 24).
-barbase:  db 0,8,16,0,8,16
+; Start index into grad[] for each band (band * STEPS mod 32).
+barbase:  db 0,8,16,24,0,8
 
 ; Staggered grid that runs off every edge, pens spread on a diagonal so
 ; the ramp rotation reads as a wave. Each record: centre x, centre y, pen.
@@ -387,9 +381,9 @@ cpn:      db 0
 cpcol:    db 0
 dcx:      db 0
 dcy:      db 0
-dline:    db 0
+dline:    db 0                    ; dline then dady -- dot() steps both via one HL
 dady:     db 0
+fillbyte: db 0                    ; fillbyte then drcnt -- ld bc,(fillbyte)
 drcnt:    db 0
-fillbyte: db 0
 curx:     db 0
 cury:     db 0

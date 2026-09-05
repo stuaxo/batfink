@@ -1,22 +1,24 @@
-; Polka -- a flat grid of dots on animated cloth.
-; Mode 0. Eighteen filled circles are drawn ONCE at start-up in a rigid
-; staggered grid, each in one of inks 1-8 (a tight warm ramp). The grid
-; never moves. Everything else is palette:
-;   * the interrupt runs a raster down every band, rewriting ink 0 every
-;     few scanlines from a sine gradient -- a smooth vertical wash, not
-;     flat blocks -- and it scrolls, so light seems to play over folds;
+; Polka -- a flat grid of dots on animated cloth, filling the screen.
+; Mode 0. A staggered grid of filled circles is drawn ONCE at start-up,
+; each in one of inks 1-8 (a tight warm ramp). The dots run off all four
+; edges so the pattern looks like it carries on past the screen, and the
+; raster paints the border the same colour as the picture -- so there is
+; no black frame, without a real overscan screen. The grid never moves.
+; Everything else is palette:
+;   * the interrupt runs a raster the full height, ink 0 rewritten every
+;     few scanlines from a sine gradient -- a smooth wash over the whole
+;     display, border included -- and it scrolls, so light plays over it;
 ;   * the dot ramp rotates one step at a time, so warm colour drifts
 ;     diagonally across the grid;
 ;   * CRTC R13 sways the whole field a couple of pixels, during blanking.
-; The dot pixels are never ink 0, so the wash flows behind them and the
-; grid reads as a print on moving fabric.
+; The dot pixels are never ink 0, so the wash flows behind them.
 
 GA     equ &7F00
 PPI_B  equ &F500
 SCREEN equ &C000
 RAD    equ 20              ; dot vertical radius, scanlines
-STEPS  equ 7               ; raster changes per band
-DELAY  equ 105             ; inner delay between them, ~one band / STEPS
+STEPS  equ 8               ; raster changes per band (6 bands cover the frame)
+DELAY  equ 95              ; inner delay between them, ~one band / STEPS
 
        org &4000
 
@@ -211,7 +213,7 @@ cls:   ld hl,SCREEN
 ; ---------------------------------------------------------------------
 drawdots:
        ld ix,dots
-       ld b,18
+       ld b,23
 dd1:   push bc
        ld a,(ix+0)
        ld (dcx),a
@@ -355,21 +357,22 @@ sinetab:  db 0,0,0,1,1,2,2,2,2,2,1,1,1,0,0,0
 ; bright red, bright magenta, pink, pastel magenta -- loops smoothly.
 warm:     db &5B,&43,&5A,&4E,&4C,&4D,&47,&4F
 
-; The backdrop wash, &40+n: a calm triangle through black - blue -
-; bright blue - sky - pastel blue and back, each shade held for three
-; samples so it reads as a gradient, not stripes. 24 entries, loops.
-grad:     db &54,&54,&54,&44,&44,&44,&55,&55,&55,&57,&57,&57
-          db &5F,&5F,&5F,&57,&57,&57,&55,&55,&55,&44,&44,&44
+; The backdrop wash, &40+n: a sine over four blues (blue, bright blue,
+; sky, pastel) -- fold shadow to crest highlight, all cloth, never black.
+; 24 samples, loops.
+grad:     db &55,&57,&5F,&5F,&5F,&5F,&5F,&57,&57,&55,&44,&44
+          db &44,&44,&44,&55,&57,&57,&5F,&5F,&5F,&5F,&5F,&57
 
 ; Start index into grad[] for each of the six bands (band * STEPS mod 24).
-barbase:  db 0,7,14,21,4,11
+barbase:  db 0,8,16,0,8,16
 
-; Staggered grid, pens spread on a diagonal so the ramp rotation reads
-; as a wave. Each record: centre x, centre y, pen.
-dots:     db  20, 26, 1,   50, 26, 4,   80, 26, 7,  110, 26, 2,  140, 26, 5
-          db  35, 76, 4,   65, 76, 6,   95, 76, 8,  125, 76, 2
-          db  20,126, 7,   50,126, 1,   80,126, 3,  110,126, 5,  140,126, 7
-          db  35,176, 2,   65,176, 4,   95,176, 6,  125,176, 8
+; Staggered grid that runs off every edge, pens spread on a diagonal so
+; the ramp rotation reads as a wave. Each record: centre x, centre y, pen.
+dots:     db   8,  0, 1,   46,  0, 4,   84,  0, 7,  122,  0, 2,  154,  0, 5
+          db  27, 50, 4,   65, 50, 6,  103, 50, 8,  141, 50, 2
+          db   8,100, 7,   46,100, 1,   84,100, 3,  122,100, 5,  154,100, 7
+          db  27,150, 2,   65,150, 4,  103,150, 6,  141,150, 8
+          db   8,200, 5,   46,200, 8,   84,200, 2,  122,200, 6,  154,200, 1
 
 phase:    db 0
 cctick:   db 0

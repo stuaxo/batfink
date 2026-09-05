@@ -22,7 +22,7 @@ export const EXAMPLES: readonly Example[] = [
   { id: 'mode2', title: 'Mode 2 — high resolution', source: mode2 },
   { id: 'sprite', title: 'Sprite — XOR block', source: sprite },
   { id: 'scroller', title: 'Scroller — hardware scroll', source: scroller },
-  { id: 'polka', title: 'Polka — palette-cycled dots', source: polka },
+  { id: 'polka', title: 'Polka — crisp dots, raster wash', source: polka },
   { id: 'keyboard', title: 'Keyboard — arrow keys', source: keyboard },
   { id: 'sound', title: 'Sound — a tune on the AY', source: sound },
   { id: 'raster', title: 'Raster State of Mind — full demo', source: DEMO_SOURCE },

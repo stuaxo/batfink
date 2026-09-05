@@ -1,16 +1,16 @@
-; Polka -- a flat grid of dots on animated cloth, filling the screen.
+; Polka -- a flat grid of dots on cloth, filling the screen.
 ; Mode 0. A staggered grid of filled circles is drawn ONCE at start-up,
 ; each in one of inks 1-8 (a tight warm ramp). The dots run off all four
 ; edges so the pattern looks like it carries on past the screen, and the
 ; raster paints the border the same colour as the picture -- so there is
 ; no black frame, without a real overscan screen. The grid never moves.
-; Everything else is palette:
+; The animation is all palette:
 ;   * the interrupt runs a raster the full height, ink 0 rewritten every
-;     few scanlines from a sine gradient -- a smooth wash over the whole
-;     display, border included -- and it scrolls, so light plays over it;
+;     few scanlines from a sine gradient -- a smooth blue wash over the
+;     whole display, border included -- and it scrolls, so light seems to
+;     play over folds of cloth;
 ;   * the dot ramp rotates one step at a time, so warm colour drifts
-;     diagonally across the grid;
-;   * CRTC R13 sways the whole field a couple of pixels, during blanking.
+;     diagonally across the grid.
 ; The dot pixels are never ink 0, so the wash flows behind them.
 
 GA     equ &7F00
@@ -64,28 +64,6 @@ clr1:  push hl
 main:  call waitvsync
        ld a,5                  ; re-phase: next interrupt is band 0, at the top
        ld (barpos),a
-
-; --- sway: CRTC R13, during blanking. Step swphase every 8 frames; it
-;     is masked where it's used, so it just runs.
-       ld hl,swtick
-       inc (hl)
-       ld a,(hl)
-       cp 8
-       jr c,sw0
-       ld (hl),0
-       ld hl,swphase
-       inc (hl)
-sw0:   ld a,(swphase)
-       and 15
-       ld e,a
-       ld d,0
-       ld hl,sinetab
-       add hl,de
-       ld a,(hl)
-       ld bc,&BC0D
-       out (c),c
-       ld b,&BD
-       out (c),a
 
 ; --- dot ramp: rotate one step every 12 frames.
        ld hl,cctick
@@ -344,8 +322,6 @@ solidtab: db &00,&C0,&0C,&CC,&30,&F0,&3C,&FC,&03
 
 hwtab:    db 10,10,10,10,10,9,9,9,8,8,8,7,7,6,6,5,5,4,3,2,0
 
-sinetab:  db 0,0,0,1,1,2,2,2,2,2,1,1,1,0,0,0
-
 ; Warm ramp, &40+n: white, pastel yellow, bright yellow, orange,
 ; bright red, bright magenta, pink, pastel magenta -- loops smoothly.
 warm:     db &5B,&43,&5A,&4E,&4C,&4D,&47,&4F
@@ -374,8 +350,6 @@ grphase:  db 0
 grtick:   db 0
 gidx:     db 0
 stepc:    db 0
-swphase:  db 0
-swtick:   db 0
 barpos:   db 0
 cpn:      db 0
 cpcol:    db 0

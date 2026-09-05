@@ -1,25 +1,29 @@
-; Polka -- big dots animated entirely by the palette.
-; Mode 0, 160x200, 16 inks. Eighteen filled circles are drawn ONCE at
-; start-up, each in one of inks 1-15. Nothing in the main loop touches
-; screen memory:
-;   * inks 1-15 are rotated one step per frame, so colour flows
-;     diagonally across the dots -- a classic colour-cycle;
-;   * the interrupt rewrites ink 0 six times down the screen, so drifting
-;     horizontal bands show through the gaps and appear to bend around
-;     the dots (the dot pixels aren't ink 0, so the band never covers them);
-;   * CRTC register 13 is nudged from a sine table, swaying the field.
+; Polka -- a flat grid of dots on animated cloth.
+; Mode 0. Eighteen filled circles are drawn ONCE at start-up in a rigid
+; staggered grid, each in one of inks 1-8 (a tight warm ramp). The grid
+; never moves. Everything else is palette:
+;   * the interrupt runs a raster down every band, rewriting ink 0 every
+;     few scanlines from a sine gradient -- a smooth vertical wash, not
+;     flat blocks -- and it scrolls, so light seems to play over folds;
+;   * the dot ramp rotates one step at a time, so warm colour drifts
+;     diagonally across the grid;
+;   * CRTC R13 sways the whole field a couple of pixels, during blanking.
+; The dot pixels are never ink 0, so the wash flows behind them and the
+; grid reads as a print on moving fabric.
 
-GA     equ &7F00           ; Gate Array
-PPI_B  equ &F500           ; bit 0 = CRTC VSYNC
+GA     equ &7F00
+PPI_B  equ &F500
 SCREEN equ &C000
-RAD      equ 20              ; dot vertical radius, in scanlines
+RAD    equ 20              ; dot vertical radius, scanlines
+STEPS  equ 7               ; raster changes per band
+DELAY  equ 105             ; inner delay between them, ~one band / STEPS
 
        org &4000
 
 start: di
        ld sp,&BFF0
        im 1
-       ld a,&C3                  ; JP irq at the mode-1 vector
+       ld a,&C3
        ld (&0038),a
        ld hl,irq
        ld (&0039),hl
@@ -29,20 +33,19 @@ start: di
        out (c),a
 
        call cls
-       call initpens
+       call setwarm             ; pens 1-8 = the warm ramp
        call drawdots
        ei
 
 ; ---------------------------------------------------------------------
-; Main loop: 50Hz, palette only. Everything steps on a slow divider so
-; the motion stays gentle rather than strobing.
+; Main loop. The rasters live in the interrupt; here we just nudge the
+; three slow phases, each on its own divider.
 ; ---------------------------------------------------------------------
 main:  call waitvsync
-       ld a,4
-       ld (barpos),a             ; re-phase the interrupt counter
+       ld a,5                  ; re-phase: next interrupt is band 0, at the top
+       ld (barpos),a
 
-; --- sway: CRTC R13 shifts the fetch start. Do it here, during blanking
-;     -- a mid-frame change would tear. Step swphase every 8 frames.
+; --- sway: CRTC R13, during blanking. Step every 8 frames.
        ld hl,swtick
        inc (hl)
        ld a,(hl)
@@ -65,39 +68,40 @@ sw0:   ld hl,sinetab
        ld b,&BD
        out (c),a
 
-; --- colour cycle: rotate inks 1-15 one step every 10 frames.
+; --- dot ramp: rotate one step every 12 frames.
        ld hl,cctick
        inc (hl)
        ld a,(hl)
-       cp 10
-       jr c,bg
+       cp 12
+       jr c,gr
        ld (hl),0
        ld hl,phase
        inc (hl)
        ld a,(hl)
-       cp 15
+       cp 8
        jr c,cc0
        xor a
        ld (hl),a
-cc0:   call cyclepens
+cc0:   call setwarm
 
-; --- band drift: move the ink-0 bands down one step every 18 frames.
-bg:    ld hl,bgtick
+; --- gradient scroll: one step every 5 frames.
+gr:    ld hl,grtick
        inc (hl)
        ld a,(hl)
-       cp 18
+       cp 5
        jr c,main
        ld (hl),0
-       ld hl,bgphase
+       ld hl,grphase
        inc (hl)
        ld a,(hl)
-       and 7
-       ld (hl),a
+       cp 24
+       jr c,main
+       ld (hl),0
        jr main
 
 ; ---------------------------------------------------------------------
-; Interrupt: six bands a frame, pen 0 taken from bgtab and scrolled by
-; bgphase so the bands crawl downward past the still dots.
+; Interrupt: a raster down one band. STEPS colour changes, DELAY apart,
+; taken from grad[] at (barbase[band] + step + grphase).
 ; ---------------------------------------------------------------------
 irq:   push af
        push bc
@@ -109,22 +113,42 @@ irq:   push af
        jr c,irq0
        xor a
 irq0:  ld (barpos),a
-       ld hl,bgphase
+       ld l,a
+       ld h,0
+       ld de,barbase
+       add hl,de
+       ld a,(hl)
+       ld hl,grphase
        add a,(hl)
-       and 7
-       ld e,a
-       ld d,0
-       ld hl,bgtab
+       ld (gidx),a
+       ld a,STEPS
+       ld (stepc),a
+irqs:  ld a,(gidx)
+irqn:  cp 24
+       jr c,irqm
+       sub 24
+       jr irqn
+irqm:  ld l,a
+       ld h,0
+       ld de,grad
        add hl,de
        ld a,(hl)
        ld bc,GA
        ld e,a
-       out (c),c                 ; select pen 0
+       out (c),c                 ; ink 0
        out (c),a
-       ld a,&10                  ; ...and the border
+       ld a,&10                  ; border
        out (c),a
        ld a,e
        out (c),a
+       ld hl,gidx
+       inc (hl)
+       ld a,DELAY
+irqd:  dec a
+       jr nz,irqd
+       ld hl,stepc
+       dec (hl)
+       jr nz,irqs
        pop hl
        pop de
        pop bc
@@ -133,51 +157,37 @@ irq0:  ld (barpos),a
        ret
 
 ; ---------------------------------------------------------------------
-; Palette. cyclepens sets pens 1-15 from coltab, offset by phase.
+; Pens 1-8 from warm[], rotated by phase.
 ; ---------------------------------------------------------------------
-initpens:
-       ld bc,GA
-       xor a
-       out (c),a                 ; pen 0
-       ld a,(bgtab)
-       out (c),a
-       ld a,&10                  ; border
-       out (c),a
-       ld a,(bgtab)
-       out (c),a
-       ; fall through
-
-cyclepens:
+setwarm:
        ld a,1
        ld (cpn),a
-cp0:   ld a,(phase)
+sw1:   ld a,(phase)
        ld hl,cpn
        add a,(hl)
-       dec a                     ; index = phase + pen - 1
-cpm:   cp 15
-       jr c,cpi
-       sub 15
-       jr cpm
-cpi:   ld e,a
+       dec a
+sw2:   cp 8
+       jr c,sw3
+       sub 8
+       jr sw2
+sw3:   ld e,a
        ld d,0
-       ld hl,coltab
+       ld hl,warm
        add hl,de
        ld a,(hl)
        ld (cpcol),a
        ld bc,GA
        ld a,(cpn)
-       out (c),a                 ; select pen n
+       out (c),a
        ld a,(cpcol)
-       out (c),a                 ; ...give it coltab[index]
+       out (c),a
        ld hl,cpn
        inc (hl)
        ld a,(hl)
-       cp 16
-       jr c,cp0
+       cp 9
+       jr c,sw1
        ret
 
-; ---------------------------------------------------------------------
-; Wait for the start of vertical sync.
 ; ---------------------------------------------------------------------
 waitvsync:
        ld bc,PPI_B
@@ -189,7 +199,6 @@ wv2:   in a,(c)
        jr nc,wv2
        ret
 
-; ---------------------------------------------------------------------
 cls:   ld hl,SCREEN
        ld de,SCREEN+1
        ld bc,&3FFF
@@ -198,7 +207,7 @@ cls:   ld hl,SCREEN
        ret
 
 ; ---------------------------------------------------------------------
-; Dots. Each record is centre x (pixels), centre y (line), pen.
+; Dots. Each record: centre x (pixels), centre y (line), pen.
 ; ---------------------------------------------------------------------
 drawdots:
        ld ix,dots
@@ -216,8 +225,8 @@ dd1:   push bc
        djnz dd1
        ret
 
-; A = pen; dcx/dcy already set. Fills a circle of radius RAD by walking
-; the rows out from the centre, half-width from hwtab.
+; A = pen; dcx/dcy set. Fills a circle: walk rows out from the centre,
+; half-width from hwtab.
 dot:   ld l,a
        ld h,0
        ld de,solidtab
@@ -225,7 +234,7 @@ dot:   ld l,a
        ld a,(hl)
        ld (fillbyte),a
 
-       ld a,(dcy)                ; top half, centre row included
+       ld a,(dcy)
        sub RAD
        ld (dline),a
        ld a,RAD
@@ -240,7 +249,7 @@ dt1:   push bc
        pop bc
        djnz dt1
 
-       ld a,(dcy)               ; bottom half
+       ld a,(dcy)
        inc a
        ld (dline),a
        ld a,1
@@ -256,10 +265,9 @@ dt2:   push bc
        djnz dt2
        ret
 
-; Fill one scanline of the current dot. dline = line, dady = |dy|.
 dotrow:
        ld a,(dline)
-       cp 200                    ; also skips the -1/-2 rows (wrapped to 254/255)
+       cp 200
        ret nc
        ld (cury),a
        ld a,(dady)
@@ -267,18 +275,18 @@ dotrow:
        ld h,0
        ld de,hwtab
        add hl,de
-       ld a,(hl)                 ; half-width in pixels
+       ld a,(hl)
        or a
        ret z
        ld c,a
-       ld a,(dcx)               ; left edge -> start byte
+       ld a,(dcx)
        sub c
        jr nc,dr0
        xor a
 dr0:   srl a
        ld (curx),a
        ld d,a
-       ld a,(dcx)               ; right edge -> end byte
+       ld a,(dcx)
        add a,c
        srl a
        cp 80
@@ -297,8 +305,8 @@ dr2:   ld (hl),c
        djnz dr2
        ret
 
-; curx (bytes), cury (line) -> HL screen address. The layout is the same
-; in every mode: eight blocks of &800, one per line within a char row.
+; curx (bytes), cury (line) -> HL. Layout is mode-independent: eight
+; blocks of &800, one per line within a char row.
 scraddr:
        ld a,(cury)
        ld b,a
@@ -320,12 +328,12 @@ scraddr:
        add hl,hl
        add hl,hl
        add hl,hl
-       add hl,hl                 ; row * 16
+       add hl,hl
        ld d,h
        ld e,l
        add hl,hl
-       add hl,hl                 ; row * 64
-       add hl,de                 ; row * 80
+       add hl,hl
+       add hl,de
        ld a,(curx)
        ld e,a
        ld d,0
@@ -337,32 +345,38 @@ scraddr:
 ; ---------------------------------------------------------------------
 ; Data
 ; ---------------------------------------------------------------------
-; Solid mode-0 byte (both pixels one pen) for pens 0-15.
 solidtab: db &00,&C0,&0C,&CC,&30,&F0,&3C,&FC,&03,&C3,&0F,&CF,&33,&F3,&3F,&FF
 
-; Ellipse half-width for |dy| = 0..RAD. Twice as tall as wide in mode-0
-; units, which comes out round once the display stretches it.
 hwtab:    db 10,10,10,10,10,10,10,9,9,9,9,8,8,8,7,7,6,5,4,3,0
 
-; Ease-in-out sway, 0..2 bytes, added to CRTC R13.
 sinetab:  db 0,0,0,1,1,2,2,2,2,2,1,1,1,0,0,0
 
-; Fifteen hardware colours, &40+n, a rainbow that loops.
-coltab:   db &4C,&4E,&5E,&5A,&50,&52,&42,&53,&57,&55,&44,&5D,&58,&4D,&47
+; Warm ramp, &40+n: white, pastel yellow, bright yellow, orange,
+; bright red, bright magenta, pink, pastel magenta -- loops smoothly.
+warm:     db &5B,&43,&5A,&4E,&4C,&4D,&47,&4F
 
-; Pen 0 down the screen: blue -> purple -> sky and back, scrolled by bgphase.
-bgtab:    db &54,&44,&45,&55,&57,&55,&45,&44
+; The backdrop wash, &40+n: a calm triangle through black - blue -
+; bright blue - sky - pastel blue and back, each shade held for three
+; samples so it reads as a gradient, not stripes. 24 entries, loops.
+grad:     db &54,&54,&54,&44,&44,&44,&55,&55,&55,&57,&57,&57
+          db &5F,&5F,&5F,&57,&57,&57,&55,&55,&55,&44,&44,&44
 
-; Staggered grid. Each record: centre x (pixels), centre y (line), pen.
-dots:     db  20, 26, 1,   50, 26, 3,   80, 26, 5,  110, 26, 7,  140, 26, 9
-          db  35, 76, 4,   65, 76, 6,   95, 76, 8,  125, 76,10
-          db  20,126, 7,   50,126, 9,   80,126,11,  110,126,13,  140,126,15
-          db  35,176,10,   65,176,12,   95,176,14,  125,176, 1
+; Start index into grad[] for each of the six bands (band * STEPS mod 24).
+barbase:  db 0,7,14,21,4,11
+
+; Staggered grid, pens spread on a diagonal so the ramp rotation reads
+; as a wave. Each record: centre x, centre y, pen.
+dots:     db  20, 26, 1,   50, 26, 4,   80, 26, 7,  110, 26, 2,  140, 26, 5
+          db  35, 76, 4,   65, 76, 6,   95, 76, 8,  125, 76, 2
+          db  20,126, 7,   50,126, 1,   80,126, 3,  110,126, 5,  140,126, 7
+          db  35,176, 2,   65,176, 4,   95,176, 6,  125,176, 8
 
 phase:    db 0
 cctick:   db 0
-bgphase:  db 0
-bgtick:   db 0
+grphase:  db 0
+grtick:   db 0
+gidx:     db 0
+stepc:    db 0
 swphase:  db 0
 swtick:   db 0
 barpos:   db 0

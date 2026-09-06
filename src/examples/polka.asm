@@ -1,14 +1,15 @@
-; Polka -- a grid of dots on cloth, filling the screen.
-; Mode 1, four inks: white paper and three blues. A staggered grid of
-; circles is drawn once at start-up; each row's left and right edges are
-; masked to the pixel, so the dots stay round at this resolution. They
-; run off every edge and the raster paints the border the paper colour,
-; so there is no black frame. The animation is all palette:
+; Polka -- a grid of ringed dots on cloth. Nothing moves; the drift is
+; all palette.
+; Mode 1, four inks: white paper and three blues. Each dot is drawn once
+; as three concentric bands -- pens 1, 2, 3 from the centre out -- with
+; the band/pen order stepped by the dot's column so neighbours are out
+; of phase. Rotating the three pens rolls the bands outward, and the
+; per-column phase makes that roll travel sideways across the grid: the
+; field reads as scrolling though not a byte of screen memory changes.
 ;   * the interrupt runs a raster the full height, paper rewritten every
 ;     few scanlines from a gradient -- a soft wash of light over the
 ;     cloth -- and it scrolls;
-;   * the three dot inks rotate through a blue ramp one step at a time,
-;     so colour drifts diagonally across the grid.
+;   * dot edges are masked to the pixel, so the bands stay round.
 
 GA     equ &7F00
 PPI_B  equ &F500
@@ -65,16 +66,20 @@ main:  call waitvsync
        ld a,5                  ; re-phase: next interrupt is band 0, at the top
        ld (barpos),a
 
-; --- dot ramp: rotate one step every 12 frames.
+; --- band roll: advance the pen rotation one step every 3 frames.
        ld hl,cctick
        inc (hl)
        ld a,(hl)
-       cp 12
+       cp 3
        jr c,gr
        ld (hl),0
        ld hl,phase
        inc (hl)
-       call setwarm
+       ld a,(hl)
+       cp 3
+       jr c,cw
+       ld (hl),0
+cw:    call setwarm
 
 ; --- gradient scroll: one step every 5 frames.
 gr:    ld hl,grtick
@@ -142,7 +147,8 @@ irqd:  dec a
        ret
 
 ; ---------------------------------------------------------------------
-; Pens 1-3 from warm[], rotated by phase.
+; Pens 1-3 from warm[], rotated by phase (phase and cpn each 0..2, so
+; phase+cpn-1 is 0..4 -- mod3[] folds it).
 ; ---------------------------------------------------------------------
 setwarm:
        ld a,1
@@ -151,9 +157,12 @@ sw1:   ld a,(phase)
        ld hl,cpn
        add a,(hl)
        dec a
-       and 3                     ; index into warm[], mod 4 (a power of two)
        ld e,a
        ld d,0
+       ld hl,mod3
+       add hl,de
+       ld a,(hl)
+       ld e,a
        ld hl,warm
        add hl,de
        ld a,(hl)
@@ -182,7 +191,8 @@ wv2:   in a,(c)
        ret
 
 ; ---------------------------------------------------------------------
-; Dots. Each record: centre x (in 2-pixel units), centre y (line), pen.
+; Dots. Each record: centre x (2-pixel units), centre y (line), column
+; phase (0..2). Each dot is three nested circles, outer to inner.
 ; ---------------------------------------------------------------------
 drawdots:
        ld ix,dots
@@ -193,15 +203,38 @@ dd1:   push bc
        ld a,(ix+1)
        ld (dcy),a
        ld a,(ix+2)
-       call dot
+       ld (dph),a
+       ld hl,hwo                 ; outer band
+       ld (hwptr),hl
+       xor a
+       call ring
+       ld hl,hwm                 ; middle band
+       ld (hwptr),hl
+       ld a,1
+       call ring
+       ld hl,hwi                 ; inner disc
+       ld (hwptr),hl
+       ld a,2
+       call ring
        ld bc,3
        add ix,bc
        pop bc
        djnz dd1
        ret
 
-; A = pen; dcx/dcy set. Fills a circle: walk rows out from the centre,
-; half-width from hwtab.
+; A = band index 0..2. Draw the current circle in pen mod3(dph+A)+1.
+ring:  ld hl,dph
+       add a,(hl)
+       ld e,a
+       ld d,0
+       ld hl,mod3
+       add hl,de
+       ld a,(hl)
+       inc a
+       ; fall through into dot
+
+; A = pen; dcx/dcy and hwptr set. Fills a circle: walk rows out from the
+; centre, half-width from the chosen table.
 dot:   ld l,a
        ld h,0
        ld de,solidtab
@@ -250,7 +283,7 @@ dotrow:
        ld a,(dady)
        ld l,a
        ld h,0
-       ld de,hwtab
+       ld de,(hwptr)
        add hl,de
        ld a,(hl)
        or a
@@ -407,18 +440,25 @@ scraddr:
 ; Solid mode-1 byte (all four pixels one pen) for pens 0-3.
 solidtab: db &00,&F0,&0F,&FF
 
-; Circle half-width per row, in pixels, stretched 1.2x for the mode-1
-; pixel aspect (pixels are taller than wide) so the dots read as round.
-hwtab:    db 23,23,23,22,22,22,22,21,21,20,19,19,18,17,16,14,13,11,8,0,0
+; Circle half-width per row, in pixels, for each band: outer, middle,
+; inner. Stretched 1.2x for the mode-1 pixel aspect (pixels are taller
+; than wide) so the circles read as round. Indexed by distance from the
+; centre row (0..RAD); a zero ends the band.
+hwo:      db 23,23,23,22,22,22,22,21,21,20,19,19,18,17,16,14,13,11,8,0,0
+hwm:      db 16,16,15,15,15,14,14,13,12,11,10,9,7,0,0,0,0,0,0,0,0
+hwi:      db 8,8,7,7,6,4,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+
+; Fold 0..4 down to 0..2.
+mod3:     db 0,1,2,0,1
 
 ; Pixels to KEEP (not fill) in the left / right fringe byte, indexed by
 ; the sub-pixel where the run starts / ends.
 nleftmask:  db &00,&88,&CC,&EE
 nrightmask: db &77,&33,&11,&00
 
-; The three dot inks, GA slots: blue, bright blue, sky blue, bright blue
-; -- a short there-and-back ramp, so the rotation reads as a soft wave.
-warm:     db &44,&55,&57,&55
+; The three cycled inks, GA slots: blue, bright blue, sky blue. Rotating
+; which pen holds which rolls the bands.
+warm:     db &44,&55,&57
 
 ; The paper wash, GA slots: bright white with two soft swells of pastel
 ; cyan -- a moving sheen, low contrast, never dark. 32 samples, scrolled
@@ -429,19 +469,21 @@ grad:     db &4B,&4B,&4B,&4B,&49,&49,&49,&49,&49,&4B,&4B,&4B,&4B,&4B,&4B,&4B
 ; Start index into grad[] for each band (band * STEPS mod 32).
 barbase:  db 0,8,16,24,0,8
 
-; Staggered grid that runs off every edge, pens spread on a diagonal so
-; the ramp rotation reads as a wave. Record: centre x (2-pixel units),
-; centre y, pen.
-dots:     db   0,  0,1,  32,  0,2,  64,  0,3,  96,  0,1, 128,  0,2, 160,  0,3
-          db  16, 50,2,  48, 50,3,  80, 50,1, 112, 50,2, 144, 50,3
-          db   0,100,3,  32,100,1,  64,100,2,  96,100,3, 128,100,1, 160,100,2
-          db  16,150,1,  48,150,2,  80,150,3, 112,150,1, 144,150,2
-          db   0,200,2,  32,200,3,  64,200,1,  96,200,2, 128,200,3, 160,200,1
+; Staggered grid that runs off every edge. Record: centre x (2-pixel
+; units), centre y, column phase. Phase = (x / 64px) mod 3 so the band
+; roll travels left to right.
+dots:     db   0,  0,0,  32,  0,1,  64,  0,2,  96,  0,0, 128,  0,1, 160,  0,2
+          db  16, 50,0,  48, 50,1,  80, 50,2, 112, 50,0, 144, 50,1
+          db   0,100,0,  32,100,1,  64,100,2,  96,100,0, 128,100,1, 160,100,2
+          db  16,150,0,  48,150,1,  80,150,2, 112,150,0, 144,150,1
+          db   0,200,0,  32,200,1,  64,200,2,  96,200,0, 128,200,1, 160,200,2
 
 phase:    db 0
 cctick:   db 0
 grphase:  db 0
 grtick:   db 0
+hwptr:    dw 0
+dph:      db 0
 gidx:     db 0
 stepc:    db 0
 barpos:   db 0

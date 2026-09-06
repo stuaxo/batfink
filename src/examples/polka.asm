@@ -1,17 +1,22 @@
-; Polka -- a grid of dots on cloth, filling the screen.
+; Polka -- a grid of dots on cloth, hardware-scrolled.
 ; Mode 1, four inks: white paper and three blues. A staggered grid of
 ; circles is drawn once at start-up; each row's left and right edges are
 ; masked to the pixel, so the dots stay round at this resolution. They
 ; run off every edge and the raster paints the border the paper colour,
-; so there is no black frame. The animation is all palette:
-;   * the interrupt runs a raster the full height, paper rewritten every
+; so there is no black frame.
+;   * The grid is drawn across the whole 16K, one column every 8 CRTC
+;     characters. Stepping the CRTC display start one character a frame
+;     drifts the whole field for almost no CPU; after 8 steps it has
+;     moved exactly one column, so it loops with no visible join.
+;   * The interrupt runs a raster the full height, paper rewritten every
 ;     few scanlines from a gradient -- a soft wash of light over the
-;     cloth -- and it scrolls;
-;   * the three dot inks rotate through a blue ramp one step at a time,
+;     cloth -- and it scrolls too.
+;   * The three dot inks rotate through a blue ramp one step at a time,
 ;     so colour drifts diagonally across the grid.
 
 GA     equ &7F00
 PPI_B  equ &F500
+SCREEN equ &C000
 RAD    equ 20              ; dot vertical radius, scanlines
 STEPS  equ 8               ; raster changes per band (6 bands cover the frame)
 DELAY  equ 95              ; inner delay between them, ~one band / STEPS
@@ -53,8 +58,15 @@ clr1:  push hl
        ld a,&4B
        out (c),a
 
+       ld bc,&BC0C               ; CRTC R12: display start stays in the
+       out (c),c                 ; &C000 page; only R13 moves, in the loop
+       ld b,&BD
+       ld a,&30
+       out (c),a
+
        call setwarm             ; pens 1-3 = the blue ramp
        call drawdots
+       call fillwrap            ; make the CRTC address wrap seamless
        ei
 
 ; ---------------------------------------------------------------------
@@ -64,6 +76,20 @@ clr1:  push hl
 main:  call waitvsync
        ld a,5                  ; re-phase: next interrupt is band 0, at the top
        ld (barpos),a
+
+; --- hardware scroll: step CRTC R13 (display start, low byte) one
+;     character -- 2 bytes, 8 pixels -- each frame. The grid column
+;     spacing is 8 characters, so after 8 steps the low byte is back to
+;     0 having moved exactly one column: the field drifts forever with
+;     no visible join.
+       ld a,(scrcnt)
+       dec a
+       and 7
+       ld (scrcnt),a
+       ld bc,&BC0D
+       out (c),c
+       ld b,&BD
+       out (c),a
 
 ; --- dot ramp: rotate one step every 12 frames.
        ld hl,cctick
@@ -179,6 +205,30 @@ wv1:   in a,(c)
 wv2:   in a,(c)
        rra
        jr nc,wv2
+       ret
+
+; Copy the first 48 bytes of each &800 block to offset 2000. When the
+; scroll pushes the CRTC address past the end of a block it wraps to the
+; start; this makes that wrap land on matching pattern.
+fillwrap:
+       ld hl,SCREEN
+       ld de,SCREEN+2000
+       ld b,8
+fwr1:  push bc
+       push hl
+       push de
+       ld bc,48
+       ldir
+       pop de
+       pop hl
+       pop bc
+       ld a,h
+       add a,8
+       ld h,a
+       ld a,d
+       add a,8
+       ld d,a
+       djnz fwr1
        ret
 
 ; ---------------------------------------------------------------------
@@ -436,7 +486,7 @@ dots:     db   0,  0,1,  32,  0,2,  64,  0,3,  96,  0,1, 128,  0,2, 160,  0,3
           db  16, 50,2,  48, 50,3,  80, 50,1, 112, 50,2, 144, 50,3
           db   0,100,3,  32,100,1,  64,100,2,  96,100,3, 128,100,1, 160,100,2
           db  16,150,1,  48,150,2,  80,150,3, 112,150,1, 144,150,2
-          db   0,200,2,  32,200,3,  64,200,1,  96,200,2, 128,200,3, 160,200,1
+          db   0,200,1,  32,200,2,  64,200,3,  96,200,1, 128,200,2, 160,200,3
 
 phase:    db 0
 cctick:   db 0
@@ -459,3 +509,4 @@ nmL:      db 0
 nmR:      db 0
 curx:     db 0
 cury:     db 0
+scrcnt:   db 0

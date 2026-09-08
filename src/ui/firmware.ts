@@ -4,7 +4,9 @@ import rom464Url from '../cpc/roms/cpc464.rom?url';
 import rom6128Url from '../cpc/roms/cpc6128.rom?url';
 import amsdosUrl from '../cpc/roms/amsdos.rom?url';
 
-export type FirmwareKind = 'cpc464' | 'cpc6128';
+// The computer Plus models boot the 6128 firmware — see plan/plus-range.md.
+// GX4000 has no firmware of its own; it lives on a cartridge.
+export type FirmwareKind = 'cpc464' | 'cpc6128' | 'plus464' | 'plus6128';
 
 export interface FirmwareRoms {
   rom: Uint8Array;
@@ -15,7 +17,7 @@ const pending: Partial<Record<FirmwareKind, Promise<FirmwareRoms>>> = {};
 
 export function loadFirmwareRoms(kind: FirmwareKind): Promise<FirmwareRoms> {
   if (!pending[kind]) {
-    const osUrl = kind === 'cpc6128' ? rom6128Url : rom464Url;
+    const osUrl = kind === 'cpc464' ? rom464Url : rom6128Url;
     const get = (u: string) => fetch(u).then((r) => {
       if (!r.ok) throw new Error(`${u}: ${r.status}`);
       return r.arrayBuffer();

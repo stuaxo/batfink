@@ -153,8 +153,9 @@ export function startApp(opts: AppOptions = {}): void {
   function loadFull(result: AssembleResult): void {
     const roms = onFirmware() ? firmwareRoms : null;
     const booted = roms !== null;
-    // Bare metal is a 464 with the ROMs pulled; only the 6128 changes the kind.
-    machine.kind = machineKind === 'cpc6128' ? 'cpc6128' : 'cpc464';
+    // Bare metal is a 464 with the ROMs pulled; every other value is a machine
+    // kind the core understands directly.
+    machine.kind = machineKind === 'bare' ? 'cpc464' : machineKind;
     machine.reset();
     machine.ram.fill(0);
     setExtRam(machine, isRam128(machine.kind));
@@ -648,11 +649,14 @@ export function startApp(opts: AppOptions = {}): void {
 
   // --- buttons ---------------------------------------------------
   const machineSel = need<HTMLSelectElement>('machine');
+  const FW_LABEL: Record<FirmwareKind, string> = {
+    cpc464: '464', cpc6128: '6128', plus464: '464 Plus', plus6128: '6128 Plus',
+  };
   machineSel.addEventListener('change', async () => {
     const want = machineSel.value as 'bare' | FirmwareKind;
     if (want !== 'bare') {
       machineSel.disabled = true;
-      status(`Loading ${want === 'cpc6128' ? '6128' : '464'} firmware ROMs…`);
+      status(`Loading ${FW_LABEL[want]} firmware ROMs…`);
       try {
         firmwareRoms = await loadFirmwareRoms(want);
       } catch {

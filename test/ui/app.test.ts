@@ -330,7 +330,7 @@ describe('playground wiring', () => {
       boot();
       const sel = document.getElementById('machine') as HTMLSelectElement;
       expect([...sel.options].map((o) => o.value))
-        .toEqual(['bare', 'cpc464', 'cpc6128', 'plus464', 'plus6128']);
+        .toEqual(['bare', 'cpc464', 'cpc6128', 'plus464', 'plus6128', 'gx4000']);
       const status = () => document.getElementById('status')!.textContent ?? '';
 
       expect((document.getElementById('r-bank-box') as HTMLElement).hidden).toBe(true);
@@ -370,6 +370,35 @@ describe('playground wiring', () => {
       document.getElementById('dbg-step')!.dispatchEvent(new Event('click'));
       expect(regs()).toMatch(/PC 000[0-9A-F]/);
       expect(bankBox.hidden).toBe(true);        // 64K
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('the GX4000 needs a cartridge, then Mount program runs the listing', () => {
+    vi.stubGlobal('requestAnimationFrame', () => 0);
+    try {
+      boot();
+      const sel = document.getElementById('machine') as HTMLSelectElement;
+      const status = () => document.getElementById('status')!.textContent ?? '';
+
+      sel.value = 'gx4000';
+      sel.dispatchEvent(new Event('change'));
+      expect((document.getElementById('cart') as HTMLElement).hidden).toBe(false);
+      expect((document.getElementById('disc') as HTMLElement).hidden).toBe(true);
+      expect((document.getElementById('tape') as HTMLElement).hidden).toBe(true);
+      expect(status()).toMatch(/mount a cartridge/i);
+
+      document.getElementById('cart-mount-prog')!.dispatchEvent(new Event('click'));
+      expect(document.getElementById('cart-status')!.textContent).toMatch(/\.CPR$/);
+      expect(status()).toMatch(/GX4000/);
+
+      document.getElementById('dbg-step')!.dispatchEvent(new Event('click'));
+      expect(document.getElementById('dbg-regs')!.textContent).toMatch(/PC 000[0-9A-F]/);
+
+      document.getElementById('cart-eject')!.dispatchEvent(new Event('click'));
+      expect(document.getElementById('cart-status')!.textContent).toBe('no cartridge');
+      expect(status()).toMatch(/mount a cartridge/i);
     } finally {
       vi.unstubAllGlobals();
     }

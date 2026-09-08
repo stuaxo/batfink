@@ -39,6 +39,7 @@
               <option value="cpc6128">Firmware (6128)</option>
               <option value="plus464">CPC 464 Plus</option>
               <option value="plus6128">CPC 6128 Plus</option>
+              <option value="gx4000">GX4000</option>
             </select>
           </label>
         </div>
@@ -58,6 +59,14 @@
           <button id="tape-rewind" type="button">Rewind</button>
           <button id="tape-eject" type="button">Eject</button>
           <span id="tape-status">no tape</span>
+        </div>
+
+        <div class="disc" id="cart" hidden>
+          <span class="disc-label">Cartridge</span>
+          <button id="cart-mount-prog" type="button">Mount program</button>
+          <label class="filebtn">Mount .cpr&hellip;<input type="file" id="cart-file" accept=".cpr,.CPR" hidden></label>
+          <button id="cart-eject" type="button">Eject</button>
+          <span id="cart-status">no cartridge</span>
         </div>
 
         <div class="timeline">
@@ -137,6 +146,7 @@
                 <option value="bin">Binary (.bin)</option>
                 <option value="dsk">Disc image, RUN&quot;NAME&quot; (.dsk)</option>
                 <option value="cdt">Tape image (.cdt)</option>
+                <option value="cpr">Cartridge, GX4000 / Plus (.cpr)</option>
               </select>
             </label>
             <label>File name <input id="dl-name" value="DEMO" maxlength="8" spellcheck="false"></label>
@@ -184,8 +194,11 @@
     </p>
     <p>
       <b>CPC 464 Plus</b> and <b>CPC 6128 Plus</b> boot the same 6128 firmware (BASIC 1.1) with 64K
-      or 128K. The Plus ASIC &mdash; 4096 colours, hardware sprites, raster interrupts &mdash; stays
-      dormant until a program unlocks it; support for it is landing stage by stage.
+      or 128K. The <b>GX4000</b> is the console: no keyboard or drive, it runs a cartridge. A
+      <b>Cartridge</b> row appears &mdash; <b>Mount program</b> wraps the current listing as a
+      <code>.cpr</code>, <b>Mount .cpr&hellip;</b> loads a real one. The Plus ASIC &mdash; 4096
+      colours, hardware sprites, raster interrupts &mdash; stays dormant until a program unlocks it;
+      support for it is landing stage by stage.
     </p>
     <p>
       In firmware mode <b>Disc</b> and <b>Tape</b> rows appear. <b>Mount program</b> puts the current
@@ -220,6 +233,7 @@
       <dt>.bin</dt><dd>Raw assembled bytes, optionally with a 128-byte AMSDOS header (type, load and entry address, checksum).</dd>
       <dt>.dsk</dt><dd>Standard 40-track DATA disc holding the AMSDOS-headered binary. There is no autoboot on a DATA disc: mount it and type <code>RUN&quot;NAME&quot;</code>.</dd>
       <dt>.cdt</dt><dd>Tape image in the firmware cassette format. <code>RUN&quot;&quot;</code> to load the first file.</dd>
+      <dt>.cpr</dt><dd>Amstrad Plus / GX4000 cartridge. One 16K block: a stub copies the program to its <code>org</code> address and jumps to it. Runs on the GX4000 here or on a real Plus.</dd>
     </dl>
 
     <h2>Checking it on another emulator</h2>

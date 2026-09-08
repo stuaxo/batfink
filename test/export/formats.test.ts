@@ -1,8 +1,11 @@
 import { describe, it, expect } from 'vitest';
 import {
   withAmsdosHeader, hasAmsdosHeader, amsdosChecksum, amsdosName,
-  makeDsk, DSK_IMAGE_SIZE, makeCdt,
+  makeDsk, DSK_IMAGE_SIZE, makeCdt, makeCpr,
 } from '../../src/export';
+import { makeZ80 } from '../../src/z80/cpu';
+import { makeCPC, readCpr, runUntil } from '../../src/cpc';
+import { installCartridge } from '../../src/cpc/roms';
 
 const code = new Uint8Array(300).map((_, i) => i & 0xff);
 
@@ -103,5 +106,38 @@ describe('CDT', () => {
     expect(cdt[body + 18]).toBe(2); // file type
     expect(cdt[body + 21] | (cdt[body + 22] << 8)).toBe(0x4000); // load address
     expect(cdt[body + 23]).toBe(0xff); // first block
+  });
+});
+
+describe('CPR', () => {
+  it('wraps the binary in a one-block AMS! cartridge', () => {
+    const cpr = makeCpr(code, { loadAddr: 0x4000, entryAddr: 0x4000 });
+    expect(String.fromCharCode(...cpr.subarray(0, 4))).toBe('RIFF');
+    expect(String.fromCharCode(...cpr.subarray(8, 12))).toBe('AMS!');
+    const pages = readCpr(cpr);
+    expect(pages.length).toBe(1);
+    expect(pages[0][0]).toBe(0xf3); // stub starts with DI
+    expect([...pages[0].subarray(15, 15 + 4)]).toEqual([...code.subarray(0, 4)]); // payload after the stub
+  });
+
+  it('rejects a payload that loads below &4000', () => {
+    expect(() => makeCpr(code, { loadAddr: 0x2000 })).toThrow(/&4000/);
+  });
+
+  it('boots: the stub stages the payload and jumps to it', () => {
+    // payload at &4000: LD A,&2A / LD (&8000),A / HALT
+    const payload = new Uint8Array([0x3e, 0x2a, 0x32, 0x00, 0x80, 0x76]);
+    const cpr = makeCpr(payload, { loadAddr: 0x4000, entryAddr: 0x4000 });
+
+    const m = makeCPC('gx4000');
+    const cpu = makeZ80(m.bus);
+    m.reset();
+    installCartridge(m, readCpr(cpr));
+    cpu.reset();
+    cpu.PC = 0x0000;
+
+    runUntil(cpu, m, { maxSteps: 200 });
+    expect(m.ram[0x4000]).toBe(0x3e);   // payload copied to its load address
+    expect(m.ram[0x8000]).toBe(0x2a);   // ...and it ran
   });
 });

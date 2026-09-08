@@ -2,8 +2,8 @@
 // lives in ../z80 and ../cpc; this file only touches the page.
 import { assemble, type AssembleResult } from '../asm';
 import { makeZ80 } from '../z80/cpu';
-import { makeCPC, snapshotSNA, AudioSink, CPC_PALETTE, Disc, Tape, readCdt, setExtRam, isRam128 } from '../cpc';
-import { installFirmware, removeFirmware } from '../cpc/roms';
+import { makeCPC, snapshotSNA, AudioSink, CPC_PALETTE, Disc, Tape, readCdt, readCpr, setExtRam, isRam128 } from '../cpc';
+import { installFirmware, removeFirmware, installCartridge } from '../cpc/roms';
 import { loadFirmwareRoms, type FirmwareRoms, type FirmwareKind } from './firmware';
 import { Sound } from './sound';
 import { Debugger } from '../debug/debugger';
@@ -15,7 +15,7 @@ import { screenAddressAt } from '../debug/screen';
 import { hex, addr16 } from '../debug/format';
 import { DEMO_SOURCE } from '../demo';
 import { EXAMPLES } from '../examples';
-import { withAmsdosHeader, makeDsk, makeCdt } from '../export';
+import { withAmsdosHeader, makeDsk, makeCdt, makeCpr } from '../export';
 import { drawWordmark } from './wordmark';
 import { attachKeyboard } from './keyboard';
 import { createEditor, type EditorFactory } from './editor';
@@ -80,9 +80,16 @@ export function startApp(opts: AppOptions = {}): void {
   let loadedImage: Uint8Array | null = null; // the code image last written to RAM
   let loadedStart = 0;
   let loadedEnd = 0;
-  let machineKind: 'bare' | FirmwareKind = 'bare';
+  let machineKind: 'bare' | FirmwareKind | 'gx4000' = 'bare';
   let firmwareRoms: FirmwareRoms | null = null;
-  const onFirmware = () => machineKind !== 'bare';
+  // Masked firmware ROMs boot: every kind except bare metal and the GX4000
+  // (which runs from a cartridge).
+  const onFirmware = () => machineKind !== 'bare' && machineKind !== 'gx4000';
+  // GX4000 cartridge: mounted pages, and whether they were wrapped from the
+  // current listing (so an edit re-wraps) or loaded from a .cpr file.
+  let cartridge: Uint8Array[] | null = null;
+  let cartFromListing = false;
+  let cartLabel = '';
 
   const initialSource = sourceFromHash(location.hash) ?? DEMO_SOURCE;
   const editor = makeEditor({
@@ -148,39 +155,68 @@ export function startApp(opts: AppOptions = {}): void {
     editor.setTiming(timing);
   }
 
+  /** Wrap the current listing as a one-block cartridge for the GX4000, or null
+   *  if it won't fit / loads below &4000. Updates `cartridge`. */
+  function listingCartridge(result: AssembleResult): Uint8Array[] | null {
+    try {
+      const code = result.bytes.subarray(result.start, result.end);
+      cartridge = readCpr(makeCpr(code, { loadAddr: result.start, entryAddr: entryOf(result) }));
+      return cartridge;
+    } catch (e) {
+      status(`Cartridge: ${(e as Error).message}`);
+      return null;
+    }
+  }
+
   /** Reset the machine and load the assembled image. Ends running. In firmware
-   *  mode the OS boots from &0000 and the code just sits in RAM for `CALL`. */
+   *  mode the OS boots from &0000 and the code just sits in RAM for `CALL`; on
+   *  the GX4000 the code lives in a cartridge and there is nothing to run until
+   *  one is mounted. */
   function loadFull(result: AssembleResult): void {
+    const isGx = machineKind === 'gx4000';
     const roms = onFirmware() ? firmwareRoms : null;
     const booted = roms !== null;
+    const entry = entryOf(result);
     // Bare metal is a 464 with the ROMs pulled; every other value is a machine
     // kind the core understands directly.
     machine.kind = machineKind === 'bare' ? 'cpc464' : machineKind;
     machine.reset();
     machine.ram.fill(0);
     setExtRam(machine, isRam128(machine.kind));
-    if (roms) {
+
+    let idle = false;
+    if (isGx) {
+      const pages = cartFromListing ? listingCartridge(result) : cartridge;
+      if (pages) installCartridge(machine, pages);
+      else { removeFirmware(machine); idle = true; }
+    } else if (roms) {
       // With a tape in the deck, boot without AMSDOS so RUN" goes to cassette.
       installFirmware(machine, roms.rom, { amsdos: machine.tape ? undefined : roms.amsdos });
     } else {
       removeFirmware(machine);
     }
-    for (let a = result.start; a < result.end; a++) machine.ram[a] = result.bytes[a];
+
+    if (!isGx) for (let a = result.start; a < result.end; a++) machine.ram[a] = result.bytes[a];
     cpu.reset();
-    const entry = entryOf(result);
-    cpu.PC = booted ? 0x0000 : entry;
+    cpu.PC = (booted || isGx) ? 0x0000 : entry;
     timeline.clear();       // history does not survive a full load
     machine.audio?.reset();
-    debug.state = 'running'; // breakpoints do
-    running = true;
+    debug.state = idle ? 'paused' : 'running'; // breakpoints survive
+    running = !idle;
     loadedImage = result.bytes.slice();
     loadedStart = result.start;
     loadedEnd = result.end;
     snapshot = snapshotSNA(cpu, machine);
     afterBuild(result);
-    status(booted
-      ? `Firmware booting. ${codeSize} bytes at ${addr16(result.start)} — CALL ${addr16(entry)} from BASIC.`
-      : `Assembled ${codeSize} bytes. Running.`);
+    if (isGx) {
+      status(idle
+        ? 'GX4000: mount a cartridge (.cpr), or Mount program to run the listing.'
+        : `GX4000 — ${cartLabel || 'cartridge'}. ${codeSize} bytes assembled.`);
+    } else {
+      status(booted
+        ? `Firmware booting. ${codeSize} bytes at ${addr16(result.start)} — CALL ${addr16(entry)} from BASIC.`
+        : `Assembled ${codeSize} bytes. Running.`);
+    }
     syncControls();
   }
 
@@ -220,7 +256,9 @@ export function startApp(opts: AppOptions = {}): void {
     rebuildTimer = window.setTimeout(() => {
       const result = assembleOnly();
       if (!result) { pauseExec(); return; }
-      if (loadedImage && result.start === loadedStart) hotPatch(result);
+      // GX4000 runs from a cartridge — a byte patch to RAM would not survive the
+      // stub's copy on the next reset, so always rebuild.
+      if (loadedImage && result.start === loadedStart && machineKind !== 'gx4000') hotPatch(result);
       else loadFull(result);
     }, REBUILD_MS);
   }
@@ -531,6 +569,14 @@ export function startApp(opts: AppOptions = {}): void {
     } else if (fmt === 'cdt') {
       downloadBytes(name + '.cdt', makeCdt(code, meta));
       note.textContent = 'Load with RUN""';
+    } else if (fmt === 'cpr') {
+      try {
+        downloadBytes(name + '.cpr', makeCpr(code, { loadAddr, entryAddr }));
+        note.textContent = 'Runs on the GX4000 or a Plus';
+      } catch (e) {
+        status(`Cartridge: ${(e as Error).message}`);
+        return;
+      }
     }
     status(`Downloaded ${name}.${fmt}`);
   }
@@ -653,8 +699,8 @@ export function startApp(opts: AppOptions = {}): void {
     cpc464: '464', cpc6128: '6128', plus464: '464 Plus', plus6128: '6128 Plus',
   };
   machineSel.addEventListener('change', async () => {
-    const want = machineSel.value as 'bare' | FirmwareKind;
-    if (want !== 'bare') {
+    const want = machineSel.value as 'bare' | FirmwareKind | 'gx4000';
+    if (want !== 'bare' && want !== 'gx4000') {
       machineSel.disabled = true;
       status(`Loading ${FW_LABEL[want]} firmware ROMs…`);
       try {
@@ -672,6 +718,7 @@ export function startApp(opts: AppOptions = {}): void {
     machineKind = want;
     need('disc').hidden = !onFirmware();
     need('tape').hidden = !onFirmware();
+    need('cart').hidden = want !== 'gx4000';
     build();
     paint();
   });
@@ -754,6 +801,50 @@ export function startApp(opts: AppOptions = {}): void {
     machine.tape = null;
     need('tape-status').textContent = 'no tape';
     status('Ejected the tape.');
+    build();
+    paint();
+  });
+
+  // --- cartridge (GX4000) ---------------------------------------
+  function mountCartridge(pages: Uint8Array[], label: string, fromListing: boolean): void {
+    cartridge = pages;
+    cartFromListing = fromListing;
+    cartLabel = label;
+    need('cart-status').textContent = label;
+    build();
+    paint();
+  }
+
+  need('cart-mount-prog').addEventListener('click', () => {
+    const code = assembledBytes();
+    if (!code || !lastBuild) { status('Assemble something first.'); return; }
+    const { name, loadAddr, entryAddr } = programMeta();
+    try {
+      const pages = readCpr(makeCpr(code, { loadAddr, entryAddr }));
+      mountCartridge(pages, `${name}.CPR`, true);
+    } catch (e) {
+      status(`Cartridge: ${(e as Error).message}`);
+    }
+  });
+
+  need<HTMLInputElement>('cart-file').addEventListener('change', async (e) => {
+    const input = e.target as HTMLInputElement;
+    const file = input.files?.[0];
+    input.value = '';
+    if (!file) return;
+    try {
+      mountCartridge(readCpr(new Uint8Array(await file.arrayBuffer())), file.name, false);
+    } catch (err) {
+      status(`${file.name}: ${(err as Error).message}`);
+    }
+  });
+
+  need('cart-eject').addEventListener('click', () => {
+    if (!cartridge) return;
+    cartridge = null;
+    cartFromListing = false;
+    cartLabel = '';
+    need('cart-status').textContent = 'no cartridge';
     build();
     paint();
   });

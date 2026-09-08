@@ -5,3 +5,5 @@ export type { AmsdosMeta } from './amsdos';
 export { makeDsk, DSK_IMAGE_SIZE } from './dsk';
 export { makeCdt } from './cdt';
 export type { CdtMeta } from './cdt';
+export { makeCpr } from './cpr';
+export type { CprMeta } from './cpr';

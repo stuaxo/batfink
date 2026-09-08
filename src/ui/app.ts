@@ -2,7 +2,7 @@
 // lives in ../z80 and ../cpc; this file only touches the page.
 import { assemble, type AssembleResult } from '../asm';
 import { makeZ80 } from '../z80/cpu';
-import { makeCPC, snapshotSNA, AudioSink, CPC_PALETTE, WIDTH, HEIGHT, Disc, Tape, readCdt, setExtRam } from '../cpc';
+import { makeCPC, snapshotSNA, AudioSink, CPC_PALETTE, WIDTH, HEIGHT, Disc, Tape, readCdt, setExtRam, isRam128 } from '../cpc';
 import { installFirmware, removeFirmware } from '../cpc/roms';
 import { loadFirmwareRoms, type FirmwareRoms, type FirmwareKind } from './firmware';
 import { Sound } from './sound';
@@ -156,9 +156,11 @@ export function startApp(opts: AppOptions = {}): void {
   function loadFull(result: AssembleResult): void {
     const roms = onFirmware() ? firmwareRoms : null;
     const booted = roms !== null;
+    // Bare metal is a 464 with the ROMs pulled; only the 6128 changes the kind.
+    machine.kind = machineKind === 'cpc6128' ? 'cpc6128' : 'cpc464';
     machine.reset();
     machine.ram.fill(0);
-    setExtRam(machine, machineKind === 'cpc6128');
+    setExtRam(machine, isRam128(machine.kind));
     if (roms) {
       // With a tape in the deck, boot without AMSDOS so RUN" goes to cassette.
       installFirmware(machine, roms.rom, { amsdos: machine.tape ? undefined : roms.amsdos });

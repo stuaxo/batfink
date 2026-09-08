@@ -3,7 +3,7 @@
 // `snapshotSNA` stays separate — it is the interchange format for other
 // emulators; this one is ours.
 import type { Z80 } from '../z80/cpu';
-import type { CPCMachine } from './machine';
+import type { CPCMachine, MachineKind } from './machine';
 import { updateRomPaging } from './rom';
 import { flushBanks } from './banking';
 import type { FdcState } from './fdc';
@@ -28,6 +28,9 @@ export interface CpuState {
 }
 
 export interface MachineState {
+  /** The machine kind this snapshot was taken on. `setState` refuses a
+   *  mismatch — a snapshot is not portable across kinds. */
+  kind: MachineKind;
   cpu: CpuState;
   ram: Uint8Array;
   crtc: Uint8Array;
@@ -65,6 +68,7 @@ export interface MachineState {
 export function getState(cpu: Z80, m: CPCMachine): MachineState {
   flushBanks(m); // make m.banks a complete 128K image (no-op without 128K)
   return {
+    kind: m.kind,
     cpu: {
       r: Array.from(cpu.R),
       rs: Array.from(cpu.Rs),
@@ -108,6 +112,9 @@ export function getState(cpu: Z80, m: CPCMachine): MachineState {
 /** Restore a snapshot. Writes into the existing arrays — the CPU and bus
  *  captured them by reference at construction. */
 export function setState(cpu: Z80, m: CPCMachine, s: MachineState): void {
+  if (s.kind !== m.kind) {
+    throw new Error(`snapshot is for a ${s.kind}, machine is a ${m.kind}`);
+  }
   cpu.R.set(s.cpu.r);
   cpu.Rs.set(s.cpu.rs);
   cpu.F = s.cpu.f; cpu.Fs = s.cpu.fs;

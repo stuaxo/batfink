@@ -1,7 +1,7 @@
 // Barrel for the CPC hardware model. The whole surface is DOM-free and runs
 // unchanged in Node.
-export { makeCPC } from './machine';
-export type { CPCMachine } from './machine';
+export { makeCPC, isRam128, isPlus } from './machine';
+export type { CPCMachine, MachineKind } from './machine';
 export { makeBus } from './ports';
 export { emptyRomSet, updateRomPaging } from './rom';
 export type { RomSet } from './rom';

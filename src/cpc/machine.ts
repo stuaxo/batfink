@@ -15,7 +15,24 @@ import type { Tape } from './tape';
 /** Hardware colour 20 in CPC_PALETTE is black; the machine powers up all-black. */
 const BLACK = 20;
 
+/** Which machine this is. Picked at construction; parameterises RAM size, the
+ *  peripherals that are wired, and whether the Plus ASIC exists. `plus*` and
+ *  `gx4000` are declared here but not yet bootable — see plan/plus-range.md. */
+export type MachineKind = 'cpc464' | 'cpc6128' | 'plus464' | 'plus6128' | 'gx4000';
+
+/** 128K models: the base 64K plus a second bank set. */
+export function isRam128(kind: MachineKind): boolean {
+  return kind === 'cpc6128' || kind === 'plus6128';
+}
+
+/** Plus-family models carry the ASIC. */
+export function isPlus(kind: MachineKind): boolean {
+  return kind === 'plus464' || kind === 'plus6128' || kind === 'gx4000';
+}
+
 export interface CPCMachine {
+  /** The machine this is. Mutable: the playground switches kind on a reload. */
+  kind: MachineKind;
   ram: Uint8Array;
   /** pens 0-15, plus the border at index 16. Values are 0x00-0x1F. */
   pens: Uint8Array;
@@ -40,6 +57,9 @@ export interface CPCMachine {
   ram128: boolean;
   /** ROM images. Fixed hardware, not machine state; empty until a ROM PR. */
   roms: RomSet;
+  /** Cartridge pages (16K each), or null. Fixed hardware like `roms`; the Plus
+   *  serves ROM space from here. Populated by installCartridge — see Stage 1. */
+  cart: Uint8Array[] | null;
   /** ROM currently visible at &0000-&3FFF, or null for RAM. Derived from
    *  gaConfig/romSelect by updateRomPaging; never snapshotted. */
   romLow: Uint8Array | null;
@@ -76,8 +96,9 @@ export interface CPCMachine {
   render(rgba: Uint8ClampedArray): void;
 }
 
-export function makeCPC(): CPCMachine {
+export function makeCPC(kind: MachineKind = 'cpc464'): CPCMachine {
   const m = {
+    kind,
     ram: new Uint8Array(0x10000),
     pens: new Uint8Array(PENS_PER_LINE),
     crtc: new Uint8Array(32),
@@ -108,6 +129,7 @@ export function makeCPC(): CPCMachine {
     psgWrite: null,
     audio: null,
     roms: emptyRomSet(),
+    cart: null,
     romLow: null,
     romHigh: null,
     banks: null,

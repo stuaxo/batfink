@@ -64,6 +64,16 @@ describe('getState / setState', () => {
     expect(m.ram).toBe(ram);
     expect(cpu.R).toBe(R);
   });
+
+  it('carries the machine kind and refuses a cross-kind restore', () => {
+    const { m, cpu } = boot();
+    const snap = getState(cpu, m);
+    expect(snap.kind).toBe('cpc464');
+
+    const other = makeCPC('cpc6128');
+    const otherCpu = makeZ80(other.bus);
+    expect(() => setState(otherCpu, other, snap)).toThrow(/cpc6128/);
+  });
 });
 
 describe('runUntil', () => {

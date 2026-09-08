@@ -71,6 +71,7 @@
           <div class="dbg-membar">
             <label>Memory <input id="dbg-addr" placeholder="follows PC" spellcheck="false"></label>
             <button id="dbg-runto">Run to address</button>
+            <button id="dbg-togfx">View as graphics</button>
           </div>
           <pre id="dbg-mem"></pre>
           <label class="dbg-trace-toggle"><input type="checkbox" id="trace-on"> Record instruction trace</label>
@@ -80,9 +81,14 @@
         <details class="gfxview">
           <summary>Memory as graphics</summary>
           <div class="gfx-body">
-            <label>Address <input id="gfx-addr" value="&4000" spellcheck="false"></label>
+            <label>Address <input id="gfx-addr" placeholder="follows PC" spellcheck="false"></label>
             <label>Mode
-              <select id="gfx-mode"><option>0</option><option selected>1</option><option>2</option></select>
+              <select id="gfx-mode">
+                <option value="auto" selected>Auto</option>
+                <option value="0">0</option>
+                <option value="1">1</option>
+                <option value="2">2</option>
+              </select>
             </label>
             <label>Width <input id="gfx-w" type="number" min="1" max="128" value="8"> bytes</label>
             <label>Rows <input id="gfx-h" type="number" min="1" max="272" value="16"></label>
@@ -170,8 +176,9 @@
       Switch <b>Machine</b> to <b>Firmware (464)</b> or <b>(6128)</b> to boot the real OS &mdash;
       BASIC 1.0 or 1.1 &mdash; to a <code>Ready</code> prompt instead. Your assembled code is loaded
       at its <code>org</code> address, so you can <code>CALL</code> it from BASIC. Downloads and the
-      debugger work the same in every mode. On the 6128 the full 128K is banked
-      (<code>OUT &amp;7Fxx</code>); the readout shows which four RAM banks are visible.
+      debugger work the same in every mode: the disassembly and hex dump follow the CPU, so a
+      paged-in firmware ROM shows through where the code is really running. On the 6128 the full
+      128K is banked (<code>OUT &amp;7Fxx</code>); the readout shows which four RAM banks are visible.
     </p>
     <p>
       In firmware mode <b>Disc</b> and <b>Tape</b> rows appear. <b>Mount program</b> puts the current
@@ -180,6 +187,12 @@
       the emulated AMSDOS. On tape, <code>RUN&quot;&quot;</code> and then any key loads the first file,
       timing the pulses through the firmware just like a real machine (mounting a tape ejects the
       disc &mdash; one at a time).
+    </p>
+    <p>
+      When paused, the <b>Memory</b> box and the <b>Memory as graphics</b> address both follow the
+      program counter while they are empty; type an address to pin them, or <code>pc</code> to go
+      back. <b>View as graphics</b> sends the hex-dump address to the graphics view, whose
+      <b>Mode</b> is <b>Auto</b> by default and matches the running screen mode.
     </p>
     <dl>
       <dt>&amp;7F00</dt><dd>Gate Array. Picks an ink, sets its colour, and selects the screen mode.</dd>

@@ -117,4 +117,40 @@ describe('Debugger', () => {
     expect(rows[0].text.replace(/\s+/g, ' ')).toBe('ld a,&01');
     expect(rows[1].isCall).toBe(true);
   });
+
+  it('disassembleAround realigns to an instruction boundary so the PC row shows', () => {
+    const m = makeCPC();
+    const cpu = makeZ80(m.bus);
+    m.reset();
+    m.ram.fill(0);
+    // two 3-byte `ld hl,&2121`, then `ret` at &4006
+    m.ram.set([0x21, 0x21, 0x21, 0x21, 0x21, 0x21, 0xc9], 0x4000);
+    cpu.reset();
+    cpu.PC = 0x4006;
+    const dbg = new Debugger(cpu, m);
+
+    // decoding from PC-4 drifts and never lands on the PC
+    expect(dbg.disassembleFrom(0x4006 - 4, 14).map((r) => r.addr)).not.toContain(0x4006);
+
+    const rows = dbg.disassembleAround(0x4006, 4, 14);
+    expect(rows[0].addr).toBe(0x4003); // backed up to a real boundary
+    expect(rows.map((r) => r.addr)).toContain(0x4006);
+    for (let i = 1; i < rows.length; i++) {
+      expect(rows[i].addr).toBe((rows[i - 1].addr + rows[i - 1].length) & 0xffff);
+    }
+  });
+
+  it('reads and disassembles through a paged-in ROM, like the CPU', () => {
+    const { dbg, m } = boot();
+    const rom = new Uint8Array(0x4000).fill(0xc9); // ret
+    m.roms.lower = rom;
+    m.romLow = rom; // lower ROM enabled at &0000-&3FFF
+
+    expect([...dbg.readMemory(0, 4)]).toEqual([0xc9, 0xc9, 0xc9, 0xc9]);
+    expect(dbg.disassembleFrom(0, 1)[0].text).toBe('ret');
+
+    m.romLow = null; // paged out -> the RAM underneath shows again
+    expect([...dbg.readMemory(0, 4)]).toEqual([0, 0, 0, 0]);
+    expect(dbg.disassembleFrom(0, 1)[0].text).toBe('nop');
+  });
 });

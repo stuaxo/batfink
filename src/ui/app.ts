@@ -12,6 +12,7 @@ import { renderGfx } from '../debug/memview';
 import { profileFrame } from '../debug/profiler';
 import { instructionCost, formatCost } from '../debug/timing';
 import { screenAddressAt } from '../debug/screen';
+import { hex, addr16 } from '../debug/format';
 import { DEMO_SOURCE } from '../demo';
 import { EXAMPLES } from '../examples';
 import { withAmsdosHeader, makeDsk, makeCdt } from '../export';
@@ -42,7 +43,12 @@ function parseAddr(text: string): number | null {
   return null;
 }
 
-const hex4 = (n: number) => '&' + n.toString(16).toUpperCase().padStart(4, '0');
+/** An address field: empty or "pc" tracks the program counter. */
+function fieldAddr(el: HTMLInputElement, follow: number): number {
+  const s = el.value.trim().toLowerCase();
+  if (s === '' || s === 'pc') return follow & 0xffff;
+  return parseAddr(el.value) ?? (follow & 0xffff);
+}
 
 export interface AppOptions {
   createEditor?: EditorFactory;
@@ -128,8 +134,8 @@ export function startApp(opts: AppOptions = {}): void {
   function afterBuild(result: AssembleResult): void {
     codeSize = result.end - result.start;
     need('r-size').textContent = `${codeSize} bytes`;
-    need<HTMLInputElement>('dl-load').placeholder = hex4(result.start);
-    need<HTMLInputElement>('dl-entry').placeholder = hex4(entryOf(result));
+    need<HTMLInputElement>('dl-load').placeholder = addr16(result.start);
+    need<HTMLInputElement>('dl-entry').placeholder = addr16(entryOf(result));
     showErrors([]);
     if ('FONT' in result.symbols) {
       const f = result.symbols['FONT'];
@@ -173,7 +179,7 @@ export function startApp(opts: AppOptions = {}): void {
     snapshot = snapshotSNA(cpu, machine);
     afterBuild(result);
     status(booted
-      ? `Firmware booting. ${codeSize} bytes at ${hex4(result.start)} — CALL ${hex4(entry)} from BASIC.`
+      ? `Firmware booting. ${codeSize} bytes at ${addr16(result.start)} — CALL ${addr16(entry)} from BASIC.`
       : `Assembled ${codeSize} bytes. Running.`);
     syncControls();
   }
@@ -320,7 +326,7 @@ export function startApp(opts: AppOptions = {}): void {
     panel.hidden = !debug.isPaused();
     if (!debug.isPaused()) return;
     const r = debug.registers();
-    const w = (n: number) => n.toString(16).toUpperCase().padStart(4, '0');
+    const w = (n: number) => hex(n, 4);
     need('dbg-regs').textContent =
       `AF ${w(r.af)}  BC ${w(r.bc)}  DE ${w(r.de)}  HL ${w(r.hl)}\n` +
       `PC ${w(r.pc)}  SP ${w(r.sp)}  IX ${w(r.ix)}  IY ${w(r.iy)}\n` +
@@ -328,7 +334,7 @@ export function startApp(opts: AppOptions = {}): void {
       `IM ${r.im}  IFF ${r.iff1 ? 1 : 0}${r.iff2 ? 1 : 0}   [ ${flagStr(r.flags)} ]`;
     const code = need('dbg-code');
     code.innerHTML = '';
-    for (const x of debug.disassembleFrom(Math.max(0, r.pc - 4), 14)) {
+    for (const x of debug.disassembleAround(r.pc, 4, 14)) {
       const line = document.createElement('div');
       line.className = 'dbg-line';
       line.dataset.addr = String(x.addr);
@@ -338,7 +344,7 @@ export function startApp(opts: AppOptions = {}): void {
       code.appendChild(line);
     }
 
-    const base = (parseAddr(need<HTMLInputElement>('dbg-addr').value) ?? (r.pc & 0xfff0)) & 0xffff;
+    const base = fieldAddr(need<HTMLInputElement>('dbg-addr'), r.pc & 0xfff0);
     const mem = debug.readMemory(base, 128);
     const lines: string[] = [];
     for (let row = 0; row < 8; row++) {
@@ -374,11 +380,13 @@ export function startApp(opts: AppOptions = {}): void {
 
   function renderGfxView(): void {
     if (!gfxCtx || !gfxDetails.open) return;
-    const addr = parseAddr(need<HTMLInputElement>('gfx-addr').value) ?? 0;
-    const mode = Number(need<HTMLSelectElement>('gfx-mode').value) as 0 | 1 | 2;
     const widthBytes = Math.max(1, Math.min(128, Number(need<HTMLInputElement>('gfx-w').value) || 1));
     const rows = Math.max(1, Math.min(272, Number(need<HTMLInputElement>('gfx-h').value) || 1));
+    const addr = fieldAddr(need<HTMLInputElement>('gfx-addr'), cpu.PC - (cpu.PC % widthBytes));
+    const modeSel = need<HTMLSelectElement>('gfx-mode').value;
+    const mode = (modeSel === 'auto' ? machine.mode : Number(modeSel)) as 0 | 1 | 2;
     const layout = need<HTMLSelectElement>('gfx-layout').value === 'screen' ? 'screen' : 'linear';
+    // Raw RAM, like the screen helper: this is the video's view, not the CPU's.
     const img = renderGfx((a) => machine.ram[a], machine.pens, { addr, mode, widthBytes, rows, layout });
     gfxCanvas.width = img.width;
     gfxCanvas.height = img.height;
@@ -395,13 +403,12 @@ export function startApp(opts: AppOptions = {}): void {
   // --- screen-address helper -------------------------------------
   const screenInfo = need('screen-info');
   const screenInfoDefault = screenInfo.textContent ?? '';
-  const hx = (n: number, d = 2) => n.toString(16).toUpperCase().padStart(d, '0');
   canvas.addEventListener('mousemove', (e) => {
     const cx = e.offsetX * (canvas.width / (canvas.clientWidth || canvas.width));
     const cy = e.offsetY * (canvas.height / (canvas.clientHeight || canvas.height));
     const hit = screenAddressAt(machine, cx, cy);
     screenInfo.textContent = hit
-      ? `&${hx(hit.addr, 4)} = ${hx(hit.byteValue)} · mode ${hit.mode} · pixel ${hit.pixelInByte + 1}/${hit.pixelsPerByte} · row ${hit.row} col ${hit.byteCol}`
+      ? `${addr16(hit.addr)} = ${hex(hit.byteValue)} · mode ${hit.mode} · pixel ${hit.pixelInByte + 1}/${hit.pixelsPerByte} · row ${hit.row} col ${hit.byteCol}`
       : screenInfoDefault;
   });
   canvas.addEventListener('mouseleave', () => { screenInfo.textContent = screenInfoDefault; });
@@ -410,9 +417,9 @@ export function startApp(opts: AppOptions = {}): void {
     const cy = e.offsetY * (canvas.height / (canvas.clientHeight || canvas.height));
     const hit = screenAddressAt(machine, cx, cy);
     if (hit) {
-      need<HTMLInputElement>('dbg-addr').value = '&' + hx(hit.addr, 4);
+      need<HTMLInputElement>('dbg-addr').value = addr16(hit.addr);
       renderDebug();
-      status(`Screen byte &${hx(hit.addr, 4)} sent to the memory view.`);
+      status(`Screen byte ${addr16(hit.addr)} sent to the memory view.`);
     }
   });
 
@@ -449,8 +456,15 @@ export function startApp(opts: AppOptions = {}): void {
     if (a === null) { status('Enter a hex address first.'); return; }
     stepExec(() => {
       debug.runToCursor(a);
-      status(cpu.PC === a ? `Stopped at ${hex4(a)}.` : `Did not reach ${hex4(a)}.`);
+      status(cpu.PC === a ? `Stopped at ${addr16(a)}.` : `Did not reach ${addr16(a)}.`);
     });
+  });
+  need('dbg-togfx').addEventListener('click', () => {
+    const a = fieldAddr(need<HTMLInputElement>('dbg-addr'), debug.registers().pc & 0xfff0);
+    need<HTMLInputElement>('gfx-addr').value = addr16(a);
+    gfxDetails.open = true;
+    renderGfxView();
+    status(`Showing ${addr16(a)} in the graphics view.`);
   });
 
   let seekQueued = false;

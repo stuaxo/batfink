@@ -3,6 +3,7 @@
 // preceding label.
 import type { Z80 } from '../z80/cpu';
 import { type CPCMachine, runUntil, getState, setState, CYCLES_PER_LINE, LINES_PER_FRAME } from '../cpc';
+import { addr16 } from './format';
 
 const FRAME_TSTATES = CYCLES_PER_LINE * LINES_PER_FRAME; // 79872
 
@@ -62,7 +63,7 @@ function attribute(byAddr: Map<number, number>, symbols: Record<string, number>)
       const mid = (lo + hi) >> 1;
       if (marks[mid].addr <= a) { idx = mid; lo = mid + 1; } else hi = mid - 1;
     }
-    return idx >= 0 ? marks[idx] : { name: `&${a.toString(16).toUpperCase().padStart(4, '0')}`, addr: a };
+    return idx >= 0 ? marks[idx] : { name: addr16(a), addr: a };
   };
 
   for (const [addr, dt] of byAddr) {

@@ -221,6 +221,30 @@ describe('playground wiring', () => {
     expect(() => document.getElementById('gfx-addr')!.dispatchEvent(new Event('input'))).not.toThrow();
   });
 
+  it('the graphics view defaults to Auto mode and a PC-following address', () => {
+    boot();
+    expect((document.getElementById('gfx-mode') as HTMLSelectElement).value).toBe('auto');
+    expect((document.getElementById('gfx-addr') as HTMLInputElement).value).toBe('');
+    const det = document.querySelector('details.gfxview') as HTMLDetailsElement;
+    det.open = true;
+    det.dispatchEvent(new Event('toggle'));
+    expect(() => {
+      document.getElementById('dbg-step')!.dispatchEvent(new Event('click'));
+      document.getElementById('dbg-step')!.dispatchEvent(new Event('click'));
+    }).not.toThrow();
+  });
+
+  it('View as graphics sends the hex-dump address to the graphics view', () => {
+    boot();
+    document.getElementById('dbg-step')!.dispatchEvent(new Event('click'));
+    const addr = document.getElementById('dbg-addr') as HTMLInputElement;
+    addr.value = '&8000';
+    addr.dispatchEvent(new Event('input'));
+    document.getElementById('dbg-togfx')!.dispatchEvent(new Event('click'));
+    expect((document.getElementById('gfx-addr') as HTMLInputElement).value).toBe('&8000');
+    expect((document.querySelector('details.gfxview') as HTMLDetailsElement).open).toBe(true);
+  });
+
   it('wires the timeline controls without error', () => {
     boot();
     expect(document.getElementById('tl-scrub')).not.toBeNull();

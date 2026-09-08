@@ -29,6 +29,9 @@ export class Debugger {
     this.trace = new Trace(cpu);
   }
 
+  /** Read a byte as the CPU sees it now — through any paged-in ROM. */
+  readByte = (addr: number): number => this.m.bus.read(addr & 0xffff);
+
   /** Add the trace hook to a run condition when recording is on. */
   private traced(cond: RunCondition): RunCondition {
     return this.trace.enabled ? { ...cond, onStep: this.trace.record } : cond;
@@ -71,7 +74,7 @@ export class Debugger {
   /** One instruction, but run a call / rst to its return. Leaves it paused. */
   stepOver(): void {
     this.state = 'paused';
-    const d = disassemble((a) => this.m.ram[a & 0xffff], this.cpu.PC);
+    const d = disassemble(this.readByte, this.cpu.PC);
     if (d.isCall) {
       const ret = (this.cpu.PC + d.length) & 0xffff;
       const bp = new Set(this.breakpoints);
@@ -116,10 +119,11 @@ export class Debugger {
     };
   }
 
-  /** A copy of `length` bytes from `addr`, wrapping at 64K. */
+  /** A copy of `length` bytes from `addr`, wrapping at 64K. Reads the CPU's
+   *  view, so a paged-in ROM shows through. */
   readMemory(addr: number, length: number): Uint8Array {
     const out = new Uint8Array(length);
-    for (let i = 0; i < length; i++) out[i] = this.m.ram[(addr + i) & 0xffff];
+    for (let i = 0; i < length; i++) out[i] = this.readByte(addr + i);
     return out;
   }
 
@@ -127,24 +131,36 @@ export class Debugger {
   traceLines(n: number): Array<{ pc: number; a: number; f: number; bc: number; de: number; hl: number; sp: number; text: string }> {
     return this.trace.recent(n).map((e) => ({
       ...e,
-      text: disassemble((a) => this.m.ram[a & 0xffff], e.pc).text,
+      text: disassemble(this.readByte, e.pc).text,
     }));
   }
 
+  private decodeAt(addr: number): DisasmRow {
+    return { addr, ...disassemble(this.readByte, addr & 0xffff) };
+  }
+
   /** `count` decoded instructions starting at `from`. */
-  disassembleFrom(from: number, count: number): Array<ReturnType<typeof decodeAt>> {
-    const out = [];
+  disassembleFrom(from: number, count: number): DisasmRow[] {
+    const out: DisasmRow[] = [];
     let addr = from & 0xffff;
     for (let i = 0; i < count; i++) {
-      const d = decodeAt(this.m, addr);
+      const d = this.decodeAt(addr);
       out.push(d);
       addr = (addr + d.length) & 0xffff;
     }
     return out;
   }
+
+  /** `count` rows around `pc`, backing up to an instruction boundary so the
+   *  row at `pc` is always present and the listing stays aligned. */
+  disassembleAround(pc: number, before: number, count: number): DisasmRow[] {
+    for (let start = Math.max(0, pc - before); start < pc; start++) {
+      let a = start;
+      while (a < pc) a += this.decodeAt(a).length;
+      if (a === pc) return this.disassembleFrom(start, count);
+    }
+    return this.disassembleFrom(pc, count);
+  }
 }
 
-function decodeAt(m: CPCMachine, addr: number) {
-  const d = disassemble((a) => m.ram[a & 0xffff], addr);
-  return { addr, ...d };
-}
+export type DisasmRow = { addr: number } & ReturnType<typeof disassemble>;

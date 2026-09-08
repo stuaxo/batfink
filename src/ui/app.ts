@@ -277,9 +277,14 @@ export function startApp(opts: AppOptions = {}): void {
   }
 
   // --- execution control --------------------------------------------
-  // Every transition ends with syncControls().
+  // Every transition ends with syncControls(). The primary button is Run when
+  // nothing is stopped (assemble + start fresh) and Continue when the debugger
+  // is paused (resume in place — Reset is the way to rebuild from a pause).
   function syncControls(): void {
-    need('pause').textContent = isLive() ? 'Pause' : 'Resume';
+    const paused = debug.isPaused();
+    need('assemble').textContent = paused ? 'Continue' : 'Run';
+    const pauseBtn = need('pause') as HTMLButtonElement;
+    pauseBtn.disabled = !isLive();
     (need('dbg-step') as HTMLButtonElement).disabled = isLive();
     (need('dbg-over') as HTMLButtonElement).disabled = isLive();
     renderDebug();
@@ -749,8 +754,11 @@ export function startApp(opts: AppOptions = {}): void {
     paint();
   });
 
-  need('assemble').addEventListener('click', () => { build(); paint(); });
-  need('pause').addEventListener('click', () => (isLive() ? pauseExec() : resumeExec()));
+  need('assemble').addEventListener('click', () => {
+    if (debug.isPaused()) { resumeExec(); paint(); }
+    else { build(); paint(); }
+  });
+  need('pause').addEventListener('click', () => { if (isLive()) pauseExec(); });
   need('reset').addEventListener('click', () => { build(); paint(); });
   need('restore').addEventListener('click', () => loadSource(DEMO_SOURCE));
   need('dl-go').addEventListener('click', download);

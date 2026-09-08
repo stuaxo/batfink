@@ -78,14 +78,35 @@ describe('playground wiring', () => {
     expect(items[0].textContent).toMatch(/line 1:/);
   });
 
-  it('the pause button toggles its label', () => {
+  it('the primary button is Run while live and Continue while paused', () => {
     boot();
+    const run = document.getElementById('assemble') as HTMLButtonElement;
     const pause = document.getElementById('pause') as HTMLButtonElement;
-    expect(pause.textContent).toBe('Pause');
-    pause.dispatchEvent(new Event('click'));
-    expect(pause.textContent).toBe('Resume');
-    pause.dispatchEvent(new Event('click'));
-    expect(pause.textContent).toBe('Pause');
+    expect(run.textContent).toBe('Run');
+    expect(pause.disabled).toBe(false);
+
+    pause.dispatchEvent(new Event('click')); // pause
+    expect(run.textContent).toBe('Continue');
+    expect(pause.disabled).toBe(true);
+
+    run.dispatchEvent(new Event('click')); // Continue -> running
+    expect(run.textContent).toBe('Run');
+    expect(pause.disabled).toBe(false);
+  });
+
+  it('Continue resumes in place — it does not reassemble or reset', () => {
+    boot();
+    const run = document.getElementById('assemble') as HTMLButtonElement;
+    const step = document.getElementById('dbg-step') as HTMLButtonElement;
+    const pcLine = () => /PC [0-9A-F]{4}/.exec(document.getElementById('dbg-regs')!.textContent!)![0];
+
+    step.dispatchEvent(new Event('click'));
+    step.dispatchEvent(new Event('click'));
+    const stepped = pcLine();
+
+    run.dispatchEvent(new Event('click')); // Continue
+    document.getElementById('pause')!.dispatchEvent(new Event('click')); // pause to peek
+    expect(pcLine()).toBe(stepped); // still where stepping left it, not back at the entry
   });
 
   it('populates the examples menu and can load one', () => {
@@ -113,35 +134,40 @@ describe('playground wiring', () => {
     expect(panel.hidden).toBe(true);
     document.getElementById('dbg-step')!.dispatchEvent(new Event('click'));
     expect(panel.hidden).toBe(false);
-    expect(document.getElementById('pause')!.textContent).toBe('Resume');
+    expect((document.getElementById('assemble') as HTMLButtonElement).textContent).toBe('Continue');
+    expect((document.getElementById('pause') as HTMLButtonElement).disabled).toBe(true);
     expect(document.getElementById('dbg-regs')!.textContent).toMatch(/PC [0-9A-F]{4}/);
     expect(document.getElementById('dbg-code')!.querySelectorAll('.dbg-line').length).toBeGreaterThan(0);
   });
 
-  it('Step / Resume / Pause cycle is coherent', () => {
+  it('Step / Continue / Pause cycle is coherent', () => {
     boot();
-    const pause = document.getElementById('pause')!;
+    const run = document.getElementById('assemble') as HTMLButtonElement;
+    const pause = document.getElementById('pause') as HTMLButtonElement;
     const step = document.getElementById('dbg-step') as HTMLButtonElement;
     const panel = document.getElementById('dbg') as HTMLDivElement;
 
-    expect(pause.textContent).toBe('Pause');
+    expect(run.textContent).toBe('Run');
+    expect(pause.disabled).toBe(false);
     expect(step.disabled).toBe(true); // can't step while running
 
     step.dispatchEvent(new Event('click')); // -> paused
-    expect(pause.textContent).toBe('Resume');
+    expect(run.textContent).toBe('Continue');
+    expect(pause.disabled).toBe(true);
     expect(step.disabled).toBe(false);
     const pc1 = document.getElementById('dbg-regs')!.textContent;
 
     step.dispatchEvent(new Event('click')); // step again
     expect(document.getElementById('dbg-regs')!.textContent).not.toBe(pc1);
 
-    pause.dispatchEvent(new Event('click')); // Resume -> running
-    expect(pause.textContent).toBe('Pause');
+    run.dispatchEvent(new Event('click')); // Continue -> running
+    expect(run.textContent).toBe('Run');
     expect(panel.hidden).toBe(true);
     expect(step.disabled).toBe(true);
+    expect(pause.disabled).toBe(false);
 
     pause.dispatchEvent(new Event('click')); // Pause -> paused
-    expect(pause.textContent).toBe('Resume');
+    expect(run.textContent).toBe('Continue');
     expect(panel.hidden).toBe(false);
   });
 

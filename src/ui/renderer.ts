@@ -1,8 +1,9 @@
 // The screen. Turns machine state into pixels on the canvas, behind an
-// interface a WebGL path can slot into unchanged — see plan/webgl-renderer.md.
-// Today there is one implementation: the software renderer in ../cpc/video,
-// reached through m.render.
+// interface with two implementations: the software renderer in ../cpc/video
+// (the reference, always correct) and a WebGL2 fragment-shader path (./gl,
+// faster). createRenderer prefers WebGL and falls back on any failure.
 import { type CPCMachine, WIDTH, HEIGHT } from '../cpc';
+import { WebGLRenderer } from './gl/webgl-renderer';
 
 export interface Renderer {
   /** Draw the machine's current frame to the canvas. */
@@ -30,7 +31,22 @@ class SoftwareRenderer implements Renderer {
   dispose(): void {}
 }
 
-/** Pick the best renderer the browser can give us. Software-only for now. */
+/** WebGL2 if the browser and the shader self-check allow it, software
+ *  otherwise. `?renderer=software` in the URL forces the reference path.
+ *
+ *  The probe runs on a throwaway canvas: a canvas that has handed out a
+ *  webgl2 context can never give a 2d one, so the page canvas must stay
+ *  untouched until we know WebGL works. */
 export function createRenderer(canvas: HTMLCanvasElement): Renderer {
+  if (new URLSearchParams(location.search).get('renderer') !== 'software') {
+    try {
+      const probe = new WebGLRenderer(document.createElement('canvas'));
+      probe.dispose();
+      return new WebGLRenderer(canvas, { selfCheck: false });
+    } catch (e) {
+      const msg = (e as Error).message;
+      if (msg !== 'no webgl2') console.warn('WebGL renderer failed, using software:', msg);
+    }
+  }
   return new SoftwareRenderer(canvas);
 }

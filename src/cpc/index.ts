@@ -10,6 +10,7 @@ export { Fdc, Disc } from './fdc';
 export type { FdcState } from './fdc';
 export { Tape, readCdt } from './tape';
 export type { TapeState } from './tape';
+export { readCpr, writeCpr } from './cartridge';
 export { renderFrame, renderView } from './video';
 export { frameView } from './frameview';
 export type { FrameView } from './frameview';

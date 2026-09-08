@@ -37,6 +37,8 @@
               <option value="bare" selected>Bare metal</option>
               <option value="cpc464">Firmware (464)</option>
               <option value="cpc6128">Firmware (6128)</option>
+              <option value="plus464">CPC 464 Plus</option>
+              <option value="plus6128">CPC 6128 Plus</option>
             </select>
           </label>
         </div>
@@ -179,6 +181,11 @@
       debugger work the same in every mode: the disassembly and hex dump follow the CPU, so a
       paged-in firmware ROM shows through where the code is really running. On the 6128 the full
       128K is banked (<code>OUT &amp;7Fxx</code>); the readout shows which four RAM banks are visible.
+    </p>
+    <p>
+      <b>CPC 464 Plus</b> and <b>CPC 6128 Plus</b> boot the same 6128 firmware (BASIC 1.1) with 64K
+      or 128K. The Plus ASIC &mdash; 4096 colours, hardware sprites, raster interrupts &mdash; stays
+      dormant until a program unlocks it; support for it is landing stage by stage.
     </p>
     <p>
       In firmware mode <b>Disc</b> and <b>Tape</b> rows appear. <b>Mount program</b> puts the current

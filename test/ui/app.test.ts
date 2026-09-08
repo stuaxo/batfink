@@ -329,7 +329,8 @@ describe('playground wiring', () => {
     try {
       boot();
       const sel = document.getElementById('machine') as HTMLSelectElement;
-      expect([...sel.options].map((o) => o.value)).toEqual(['bare', 'cpc464', 'cpc6128']);
+      expect([...sel.options].map((o) => o.value))
+        .toEqual(['bare', 'cpc464', 'cpc6128', 'plus464', 'plus6128']);
       const status = () => document.getElementById('status')!.textContent ?? '';
 
       expect((document.getElementById('r-bank-box') as HTMLElement).hidden).toBe(true);
@@ -341,6 +342,34 @@ describe('playground wiring', () => {
       expect(document.getElementById('dbg-regs')!.textContent).toMatch(/PC 000[0-9A-F]/);
       expect((document.getElementById('r-bank-box') as HTMLElement).hidden).toBe(false);
       expect(document.getElementById('r-bank')!.textContent).toBe('0 1 2 3');
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('CPC 464 Plus and 6128 Plus boot the 6128 firmware at 64K / 128K', async () => {
+    await stubRomFetch();
+    vi.stubGlobal('requestAnimationFrame', () => 0);
+    try {
+      boot();
+      const sel = document.getElementById('machine') as HTMLSelectElement;
+      const status = () => document.getElementById('status')!.textContent ?? '';
+      const bankBox = document.getElementById('r-bank-box') as HTMLElement;
+      const regs = () => document.getElementById('dbg-regs')!.textContent ?? '';
+
+      sel.value = 'plus6128';
+      sel.dispatchEvent(new Event('change'));
+      await vi.waitFor(() => expect(status()).toMatch(/Firmware booting/));
+      document.getElementById('dbg-step')!.dispatchEvent(new Event('click'));
+      expect(regs()).toMatch(/PC 000[0-9A-F]/); // running from the reset vector
+      expect(bankBox.hidden).toBe(false);       // 128K
+
+      sel.value = 'plus464';
+      sel.dispatchEvent(new Event('change'));
+      await vi.waitFor(() => expect(status()).toMatch(/Firmware booting/));
+      document.getElementById('dbg-step')!.dispatchEvent(new Event('click'));
+      expect(regs()).toMatch(/PC 000[0-9A-F]/);
+      expect(bankBox.hidden).toBe(true);        // 64K
     } finally {
       vi.unstubAllGlobals();
     }

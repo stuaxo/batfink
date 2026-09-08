@@ -41,34 +41,54 @@ today's `m.romLow` / `m.romHigh`.
 
 ---
 
-## Stage 0 — machine-kind seam (~2–3 days)
+## Stage 0 — machine-kind seam ✅ (PR #53)
 
-No new hardware; just the scaffolding so later stages are additive.
-
-- `src/cpc/machine.ts` — `makeCPC(kind)`, store `m.kind`; `m.asic = null`,
-  `m.cart = null`. `m.reset()` unchanged for the CPC kinds.
-- `src/cpc/state.ts` — `MachineState.kind`; `getState` records it, `setState`
-  asserts a match (a snapshot is bound to its machine kind). `asic` field added
-  as `null` now, populated in Stage 2.
-- `src/ui/app.ts` — `machineKind` union widens; `onFirmware()` → `hasBios()`
-  (true for every non-bare kind). Disc / Tape rows gate on
-  `hasBios() && kind !== 'gx4000'`.
-- `src/ui/firmware.ts` → `roms.ts` there renamed conceptually to
-  `machine-roms.ts`: `loadMachineRoms(kind)` returns the right ROM/cartridge
-  bytes.
-- Tests: `test/cpc/machine.test.ts` — kind defaults to `cpc464`; `m.asic` /
-  `m.cart` null on the CPC kinds; `setState` rejects a cross-kind snapshot.
-
-**Verify:** `npm test`, `npm run typecheck`. The Machine switch still shows only
-the current three options; nothing user-visible changes yet.
+Scaffolding, no user-visible change. `makeCPC(kind)` takes a `MachineKind`
+(`cpc464` default, `cpc6128`, and the not-yet-bootable `plus464` / `plus6128` /
+`gx4000`); `m.kind` rides in `MachineState` and `setState` refuses a cross-kind
+restore; `m.cart: Uint8Array[] | null` added; `isRam128` / `isPlus` classify.
+`m.asic` is deferred to Stage 2 (added when it has a shape).
 
 ---
 
-## Stage 1 — cartridge (`.cpr`) + Plus/GX4000 boot in compatibility mode (~1 week)
+## Stage 1a — computer Plus boot (`plus464`, `plus6128`) (~1–2 days)
 
-Ships: the three kinds appear in the Machine switch and boot `.cpr` cartridges.
-Software that never unlocks the ASIC runs correctly; ASIC software boots but
-renders as a plain CPC until Stage 2.
+**No licensing blocker and no new ROM asset.** A computer Plus is, for our
+purposes, a 6128 with the ASIC bolted on: the retail system cartridge is the
+same firmware family as `cpc6128.rom` (BASIC 1.1 differs by ~1 byte, the OS by a
+handful of reset/cartridge-plumbing bytes). Close enough to boot `Ready`, take
+`CALL`, and run anything that drives the ASIC itself. What makes it a Plus is
+`m.kind` + `m.asic` (Stage 2), not the ROM — so reuse the existing
+`installFirmware` path.
+
+- `src/ui/firmware.ts` — `loadFirmwareRoms(kind)` serves `cpc6128.rom` for
+  `plus464` and `plus6128` too (`amsdos.rom` only for `plus6128` — the 464 Plus
+  has no built-in drive).
+- `src/ui/app.ts` — `machineKind` union widens to the Plus kinds;
+  `machine.kind` set from it in `loadFull`; `installFirmware` unchanged;
+  `setExtRam(m, isRam128(kind))` already handles `plus6128`. Disc / Tape rows:
+  shown for `plus6128`, hidden for `plus464` and `gx4000`.
+- `index.html` — `#machine` gains **CPC 464 Plus** and **CPC 6128 Plus**.
+- Notes: one line — Plus mode boots the 6128 firmware; the ASIC is dormant until
+  a program unlocks it.
+- Tests: `test/ui/app.test.ts` — both kinds boot to the firmware banner and step
+  from the reset vector; `plus6128` shows the RAM-bank readout and the Disc row,
+  `plus464` does not.
+
+**Caveats** (note, don't block): not the retail boot (no cartridge menu / Burnin'
+Rubber — fine for a dev tool); verify the boot against WinAPE's Plus mode /
+Caprice; a program leaning on a Plus-OS-specific firmware quirk (rare) may differ.
+
+**Verify:** `npm run dev` → **CPC 6128 Plus** boots to `Ready`, `CALL` the
+listing works, RAM banking works; **CPC 464 Plus** boots to `Ready` with 64K and
+no Disc row.
+
+---
+
+## Stage 1b — `.cpr` cartridges + GX4000 (~3–4 days)
+
+Independent of 1a. Adds loading real Plus / GX4000 cartridges and the GX4000
+machine (which has no BIOS of its own — it boots the cartridge).
 
 ### Cartridge format — `src/cpc/cartridge.ts`
 
@@ -86,15 +106,6 @@ a cartridge is present `updateRomPaging` serves ROM space from it:
 
 (ASIC RMR2 lower-ROM page selection is deferred to Stage 2.)
 
-### Boot ROMs — `src/cpc/roms/`
-
-- **Plus system cartridge** — `plus.cpr` (OS + BASIC 1.1 + cartridge menu).
-  **Licensing must be resolved first** (see Decisions). The `plus464` /
-  `plus6128` kinds need it for a BASIC prompt.
-- **GX4000** needs no system cartridge — games are self-contained. GX4000 +
-  homebrew `.cpr` is unblocked regardless of the licensing question, so it can
-  ship first.
-
 `installCartridge(m, pages)` in `machine-roms.ts`, sibling to
 `installFirmware`: sets `m.cart`, power-on paging, `updateRomPaging`. Reset
 vector stays `&0000` (runs cartridge page 0).
@@ -108,9 +119,10 @@ fire buttons sit on the spare joystick lines.
 
 ### UI — `index.html` + `src/ui/app.ts`
 
-- `#machine`: add `CPC 464 Plus`, `CPC 6128 Plus`, `GX4000`.
-- **Cartridge** row (like Disc / Tape, shown for the Plus kinds): *Mount
+- `#machine`: add **GX4000**.
+- **Cartridge** row (like Disc / Tape, shown for every Plus kind): *Mount
   .cpr…*, *Mount program*, *Eject*. GX4000 with no cartridge shows a prompt.
+  On `plus464` / `plus6128` a mounted cartridge overrides the 6128 firmware boot.
 - `src/export/cpr.ts` — minimal `makeCpr(code, meta)`: page 0 = a short boot
   stub that copies the listing to its `org` and jumps. Enough for *Mount
   program* and GX4000; not a full authoring format. Wire into the Download menu
@@ -122,15 +134,13 @@ fire buttons sit on the spare joystick lines.
   last chunk, rejects non-`AMS!`.
 - `test/export/cpr.test.ts` — `makeCpr` round-trips through the parser; the
   boot stub lands at page 0.
-- `test/integration/emulator/plus-boot.itest.ts` — system cartridge → `Ready`,
-  a BASIC 1.1 line runs. Gated on the ROM asset like the existing firmware
-  itests.
-- `test/ui/app.test.ts` — the three kinds boot without throwing; the Cartridge
-  row shows for Plus, hides for GX4000; GX4000 hides Disc / Tape.
+- `test/integration/emulator/gx4000-boot.itest.ts` — a small hand-assembled
+  `.cpr` boots and paints.
+- `test/ui/app.test.ts` — GX4000 boots a mounted `.cpr` without throwing; the
+  Cartridge row shows for every Plus kind; GX4000 hides Disc / Tape / keyboard.
 
 **Verify:** `npm run dev` → pick **GX4000**, Mount a homebrew `.cpr`, see it
-run. Pick **CPC 6128 Plus**, boot to `Ready`, `CALL` the listing. Cross-check a
-`.cpr` boot on WinAPE / Arnold.
+run. Cross-check a `.cpr` boot on WinAPE / Arnold.
 
 ---
 
@@ -240,11 +250,11 @@ interrupt, stop. Drives `src/cpc/ay.ts` with no CPU cost.
 
 ## Decisions to flag
 
-1. **Plus system-cartridge licensing.** Amstrad's redistribution permission is
-   usually cited for "the CPC and Spectrum ROMs". The Plus system cartridge
-   (BIOS + BASIC 1.1 + Burnin' Rubber) is less clearly covered — resolve before
-   committing `plus.cpr`. GX4000 is unaffected, so **Stage 1 can ship GX4000
-   first** and add the computer-Plus BASIC boot once licensing is clear.
+1. **Plus system firmware — resolved.** Rather than ship the retail Plus system
+   cartridge (BIOS + BASIC 1.1 + Burnin' Rubber, whose redistribution is murky),
+   the computer Plus models boot the `cpc6128.rom` we already redistribute — the
+   same firmware family, ~1 byte different in BASIC. No new licensing surface, no
+   cartridge menu. GX4000 needs no system firmware (games are self-contained).
 2. **Renderer ordering.** Stages 2–5 assume the finer renderer from the
    separate WebGL plan. If it slips, Stage 2's palette model and register file
    still land on canvas-2D (colours approximate); sprites / scroll / split are
@@ -257,9 +267,9 @@ interrupt, stop. Drives `src/cpc/ay.ts` with no CPU cost.
 
 ## Effort
 
-Stage 0 ~2–3 days · Stage 1 ~1 week (GX4000 path faster) · Stages 2–5 ~1 week
-each, renderer-dependent · Stage 6 ~1–2 days. **~5–7 weeks** plus the separate
-WebGL renderer move.
+Stage 0 ✅ · Stage 1a ~1–2 days · Stage 1b ~3–4 days · Stages 2–5 ~1 week each,
+renderer-dependent · Stage 6 ~1–2 days. **~5–6 weeks** plus the separate WebGL
+renderer move.
 
 ## Sources
 

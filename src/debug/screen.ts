@@ -31,6 +31,8 @@ export function screenAddressAt(m: CPCMachine, cx: number, cy: number): ScreenHi
   const byteCol = Math.floor(logicalX / pixelsPerByte);
   const pixelInByte = logicalX % pixelsPerByte;
 
+  // Video DMA reads RAM directly, ignoring ROM paging — so this reads `m.ram`,
+  // unlike the debugger's hex dump, which follows the CPU through paged ROM.
   const base = (m.crtc[12] & 0x30) << 10;
   const offset = (((m.crtc[12] & 0x03) << 8) | m.crtc[13]) * 2;
   const lineStart = ((row >> 3) * bytesPerLine + offset) & 0x7ff;

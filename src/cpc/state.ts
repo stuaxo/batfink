@@ -38,6 +38,8 @@ export interface MachineState {
   psg: Uint8Array;
   keys: Uint8Array;
   linePens: Uint8Array;
+  /** the used span of m.paletteWrites (paletteWriteCount * 4 entries). */
+  paletteWrites: Int32Array;
   mode: number;
   penSelect: number;
   crtcSelect: number;
@@ -86,6 +88,7 @@ export function getState(cpu: Z80, m: CPCMachine): MachineState {
     psg: m.psg.slice(),
     keys: m.keys.slice(),
     linePens: m.linePens.slice(),
+    paletteWrites: m.paletteWrites.slice(0, m.paletteWriteCount * 4),
     mode: m.mode,
     penSelect: m.penSelect,
     crtcSelect: m.crtcSelect,
@@ -129,6 +132,8 @@ export function setState(cpu: Z80, m: CPCMachine, s: MachineState): void {
   m.psg.set(s.psg);
   m.keys.set(s.keys);
   m.linePens.set(s.linePens);
+  m.paletteWrites.set(s.paletteWrites);
+  m.paletteWriteCount = s.paletteWrites.length / 4;
   m.mode = s.mode;
   m.penSelect = s.penSelect;
   m.crtcSelect = s.crtcSelect;

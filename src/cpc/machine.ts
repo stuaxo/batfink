@@ -39,8 +39,15 @@ export interface CPCMachine {
   crtc: Uint8Array;
   /** key matrix, one byte per line; a low bit means "pressed". */
   keys: Uint8Array;
-  /** per-scanline palette snapshot (LINES_PER_FRAME * PENS_PER_LINE bytes). */
+  /** per-scanline palette snapshot (LINES_PER_FRAME * PENS_PER_LINE bytes),
+   *  taken at the start of each line — the border and each row's opening colours. */
   linePens: Uint8Array;
+  /** Gate Array pen writes within the current frame, as (line, cycle-in-line,
+   *  pen, value) quads, in time order. Lets the renderer place a colour change
+   *  mid-scanline instead of only at line starts. Cleared each frame; the used
+   *  span is snapshotted so a restored frame renders identically. */
+  paletteWrites: Int32Array;
+  paletteWriteCount: number;
   mode: number;
   penSelect: number;
   crtcSelect: number;
@@ -106,6 +113,10 @@ export function makeCPC(kind: MachineKind = 'cpc464'): CPCMachine {
     // Palette snapshot per scanline, so mid-frame ink changes (raster bars)
     // actually show up in the rendered picture.
     linePens: new Uint8Array(LINES_PER_FRAME * PENS_PER_LINE),
+    // ~1.6 writes per scanline before it saturates; a heavy raster demo that
+    // overruns just loses its latest few mid-line changes, never crashes.
+    paletteWrites: new Int32Array(512 * 4),
+    paletteWriteCount: 0,
     psg: new Uint8Array(16),
     mode: 1,
     penSelect: 0,
@@ -150,6 +161,7 @@ export function makeCPC(kind: MachineKind = 'cpc464'): CPCMachine {
     m.mode = 1; m.penSelect = 0; m.crtcSelect = 0; m.kbdLine = 0;
     m.vsync = false; m.frameReady = false;
     m.frameCycles = 0; m.lineCounter = 0; m.interruptCounter = 0; m.frames = 0;
+    m.paletteWriteCount = 0;
     m.gaConfig = 0x8d; m.romSelect = 0;
     setRamConfig(m, 0); // config 0: banks 0-3 visible (no-op without 128K)
     m.ppiA = 0; m.ppiB = 0; m.ppiC = 0; m.ppiControl = 0x82;

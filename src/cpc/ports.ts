@@ -9,6 +9,20 @@ import { psgStrobe } from './psg';
 import { updateRomPaging } from './rom';
 import { setRamConfig } from './banking';
 
+/** Record a Gate Array pen write at the current raster position, so the
+ *  renderer can place a colour change mid-scanline. Drops writes once the
+ *  frame's buffer is full — a heavy raster demo loses its latest few, no more. */
+function logPenWrite(m: CPCMachine, pen: number, value: number): void {
+  const n = m.paletteWriteCount;
+  if (n * 4 + 3 >= m.paletteWrites.length) return;
+  const w = m.paletteWrites;
+  w[n * 4] = m.lineCounter;
+  w[n * 4 + 1] = m.frameCycles;
+  w[n * 4 + 2] = pen;
+  w[n * 4 + 3] = value;
+  m.paletteWriteCount = n + 1;
+}
+
 export function makeBus(m: CPCMachine): Bus {
   return {
     // Hot path. With no ROM paged in (every current demo) both fields are null:
@@ -28,7 +42,7 @@ export function makeBus(m: CPCMachine): Bus {
       if ((port & 0xc000) === 0x4000) { // Gate Array
         switch (v & 0xc0) {
           case 0x00: m.penSelect = (v & 0x10) ? 16 : (v & 0x0f); break;
-          case 0x40: m.pens[m.penSelect] = v & 0x1f; break;
+          case 0x40: m.pens[m.penSelect] = v & 0x1f; logPenWrite(m, m.penSelect, v & 0x1f); break;
           case 0x80: m.mode = v & 0x03; m.gaConfig = v; updateRomPaging(m); break;
           case 0xc0: setRamConfig(m, v); break;
         }

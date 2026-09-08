@@ -1,6 +1,7 @@
-// Turns the current machine state into pixels. Every scanline is drawn from its
-// own palette snapshot (m.linePens), so raster splits survive into the border
-// exactly as they do on a real machine.
+// Turns the current machine state into pixels. Each scanline opens with its own
+// palette snapshot (m.linePens) so raster splits survive into the border; pen
+// writes made partway through a line's active display (m.paletteWrites) then
+// take effect from that point rightward, for mid-line colour changes.
 import { CPC_PALETTE, type Rgb } from './palette';
 import { PIXEL_TABLES } from './pixels';
 import { BORDER_X, BORDER_Y, WIDTH, LINES_PER_FRAME, PENS_PER_LINE } from './constants';
@@ -35,6 +36,16 @@ export function renderView(v: FrameView, rgba: Uint8ClampedArray): void {
   };
   const dbl = (o0: number) => rgba.copyWithin(o0 + WIDTH * 4, o0, o0 + WIDTH * 4);
 
+  // Mid-line pen writes bucketed by scanline, in time (== cycle) order. Border
+  // writes (pen 16) are not placed mid-line yet — the border keeps its opening
+  // colour for the whole row.
+  const midLine: (number[] | undefined)[] = new Array(LINES_PER_FRAME);
+  for (let i = 0; i < v.paletteWriteCount; i++) {
+    if (v.paletteWrites[i * 4 + 2] >= 16) continue;
+    const ln = v.paletteWrites[i * 4];
+    (midLine[ln] ??= []).push(i);
+  }
+
   for (let i = 0; i < BORDER_Y; i++) { // top border
     const line = (LINES_PER_FRAME - BORDER_Y + i) % LINES_PER_FRAME;
     const o0 = (i * 2) * WIDTH * 4;
@@ -53,8 +64,19 @@ export function renderView(v: FrameView, rgba: Uint8ClampedArray): void {
     if (y < rows) {
       const raster = y & 7, charRow = y >> 3;
       const lineStart = (charRow * bytesPerLine + offset) & 0x7ff;
+      const rw = midLine[y];
+      let rwi = 0;
       let x = BORDER_X;
       for (let b = 0; b < 80 && x < BORDER_X + 640; b++) {
+        if (rw) { // apply pen writes the raster has reached (2 T-states / byte)
+          const reached = b * 2;
+          while (rwi < rw.length && v.paletteWrites[rw[rwi] * 4 + 1] <= reached) {
+            const wp = v.paletteWrites[rw[rwi] * 4 + 2] * 3;
+            const col = CPC_PALETTE[v.paletteWrites[rw[rwi] * 4 + 3] & 0x1f];
+            rgb[wp] = col[0]; rgb[wp + 1] = col[1]; rgb[wp + 2] = col[2];
+            rwi++;
+          }
+        }
         const addr = base + raster * 0x800 + ((lineStart + b) & 0x7ff);
         const pix = table[ram[addr]];
         for (let i = 0; i < pix.length; i++) {

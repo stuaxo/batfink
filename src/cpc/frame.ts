@@ -57,7 +57,7 @@ export function runUntil(cpu: Z80, m: CPCMachine, cond: RunCondition): StopReaso
   const audio = cond.audio ? m.audio : null;
   const tape = m.tape;
   const maxSteps = cond.maxSteps ?? Infinity;
-  if (cond.frame) m.frameReady = false;
+  if (cond.frame) { m.frameReady = false; m.paletteWriteCount = 0; }
 
   let steps = 0;
   let guard = 0;

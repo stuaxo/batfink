@@ -15,10 +15,21 @@ export interface FrameView {
   /** CRTC registers as they stand at the end of the frame. */
   crtc: Uint8Array;
   /** Per-scanline palette snapshot: LINES_PER_FRAME * PENS_PER_LINE bytes,
-   *  pens 0-15 then the border at index 16. */
+   *  pens 0-15 then the border at index 16. Each line's opening colours. */
   linePens: Uint8Array;
+  /** Mid-frame pen writes as (line, cycle-in-line, pen, value) quads, in time
+   *  order — for colour changes within a scanline. */
+  paletteWrites: Int32Array;
+  paletteWriteCount: number;
 }
 
 export function frameView(m: CPCMachine): FrameView {
-  return { ram: m.ram, mode: m.mode, crtc: m.crtc, linePens: m.linePens };
+  return {
+    ram: m.ram,
+    mode: m.mode,
+    crtc: m.crtc,
+    linePens: m.linePens,
+    paletteWrites: m.paletteWrites,
+    paletteWriteCount: m.paletteWriteCount,
+  };
 }

@@ -20,6 +20,7 @@ export interface FirmwareOptions {
  *  lower and upper ROM both enabled, so a CPU reset to &0000 runs the OS. */
 export function installFirmware(m: CPCMachine, rom: Uint8Array, opts: FirmwareOptions = {}): void {
   const { lower, upper } = splitFirmware(rom);
+  m.cart = null; // masked firmware and a cartridge are mutually exclusive
   m.roms.lower = lower;
   m.roms.upper[0] = upper;
   if (opts.amsdos) {
@@ -32,10 +33,22 @@ export function installFirmware(m: CPCMachine, rom: Uint8Array, opts: FirmwareOp
   updateRomPaging(m);
 }
 
-/** Remove all ROMs and return to the bare-metal (RAM-only) configuration. */
+/** Install a Plus / GX4000 cartridge: its 16K blocks serve the ROM windows,
+ *  block 0 runs from the reset vector. Clears any masked firmware ROMs. */
+export function installCartridge(m: CPCMachine, pages: Uint8Array[]): void {
+  m.cart = pages;
+  m.roms.lower = null;
+  m.roms.upper.length = 0;
+  m.gaConfig = 0x00; // power-on: mode 0, both ROM windows enabled
+  m.romSelect = 0;
+  updateRomPaging(m);
+}
+
+/** Remove all ROMs and cartridge and return to the bare-metal configuration. */
 export function removeFirmware(m: CPCMachine): void {
   m.roms.lower = null;
   m.roms.upper.length = 0;
+  m.cart = null;
   m.gaConfig = 0x8d;
   updateRomPaging(m);
 }

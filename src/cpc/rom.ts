@@ -20,9 +20,22 @@ export function emptyRomSet(): RomSet {
  *  Gate Array ROM-enable bits (&7Fxx bits 2/3) or the ROM-select latch (&DFxx).
  *  gaConfig bit 2 = lower ROM disable, bit 3 = upper ROM disable. */
 export function updateRomPaging(m: CPCMachine): void {
+  const lowerOn = (m.gaConfig & 0x04) === 0;
+  const upperOn = (m.gaConfig & 0x08) === 0;
+
+  // A Plus with a cartridge serves both ROM windows from its 16K blocks: block
+  // 0 at &0000, the ROM-selected block at &C000 (block 0 as the fallback). The
+  // ASIC's own lower-ROM block select is a later job.
+  const cart = m.cart;
+  if (cart) {
+    m.romLow = lowerOn ? cart[0] ?? null : null;
+    m.romHigh = upperOn ? (cart[m.romSelect & 0x1f] ?? cart[0] ?? null) : null;
+    return;
+  }
+
   const { lower, upper } = m.roms;
-  m.romLow = lower && (m.gaConfig & 0x04) === 0 ? lower : null;
+  m.romLow = lower && lowerOn ? lower : null;
   // An unpopulated upper ROM number falls back to ROM 0 (BASIC) on the 464.
   const hi = upper[m.romSelect] ?? upper[0] ?? null;
-  m.romHigh = hi && (m.gaConfig & 0x08) === 0 ? hi : null;
+  m.romHigh = hi && upperOn ? hi : null;
 }

@@ -2,7 +2,7 @@
 // lives in ../z80 and ../cpc; this file only touches the page.
 import { assemble, type AssembleResult } from '../asm';
 import { makeZ80 } from '../z80/cpu';
-import { makeCPC, snapshotSNA, AudioSink, CPC_PALETTE, WIDTH, HEIGHT, Disc, Tape, readCdt, setExtRam, isRam128 } from '../cpc';
+import { makeCPC, snapshotSNA, AudioSink, CPC_PALETTE, Disc, Tape, readCdt, setExtRam, isRam128 } from '../cpc';
 import { installFirmware, removeFirmware } from '../cpc/roms';
 import { loadFirmwareRoms, type FirmwareRoms, type FirmwareKind } from './firmware';
 import { Sound } from './sound';
@@ -23,6 +23,7 @@ import { sourceFromHash, hashForSource } from './share';
 import { listRevisions, saveRevision, getRevision, deleteRevision } from './revisions';
 import { downloadBytes, downloadBlob } from './download';
 import { screenshot, record, type Recorder } from './capture';
+import { createRenderer } from './renderer';
 
 const FRAME_MS = 19.968; // 1000 / 50.08Hz
 const REBUILD_MS = 300;
@@ -58,9 +59,7 @@ export function startApp(opts: AppOptions = {}): void {
   const makeEditor = opts.createEditor ?? createEditor;
 
   const canvas = need<HTMLCanvasElement>('screen');
-  const maybeCtx = canvas.getContext('2d');
-  if (!maybeCtx) throw new Error('no 2d context');
-  const ctx = maybeCtx;
+  const renderer = createRenderer(canvas);
   const errBox = need<HTMLUListElement>('errors');
   const okBox = need<HTMLParagraphElement>('ok');
   const statusBox = need<HTMLParagraphElement>('status');
@@ -72,8 +71,6 @@ export function startApp(opts: AppOptions = {}): void {
   const timeline = new Timeline(cpu, machine);
   const sound = new Sound();
   let soundOn = false;
-  const image = ctx.createImageData(WIDTH, HEIGHT);
-  const rgba = image.data;
   let running = false;
   // The machine is RUNNING, PAUSED, or REVIEWING (paused, showing a past frame).
   const isLive = () => running && debug.state === 'running' && !timeline.reviewing;
@@ -234,8 +231,7 @@ export function startApp(opts: AppOptions = {}): void {
   }
 
   function paint(): void {
-    machine.render(rgba);
-    ctx.putImageData(image, 0, 0);
+    renderer.draw(machine);
     need('r-frame').textContent = String(machine.frames);
     need('r-pc').textContent = '&' + cpu.PC.toString(16).toUpperCase().padStart(4, '0');
     need('r-mode').textContent = String(machine.mode);

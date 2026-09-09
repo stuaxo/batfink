@@ -4,6 +4,22 @@ Makes Phase B of [`hardware-variants.md`](hardware-variants.md) concrete. The
 464 stays the identity and the default; this adds the three Plus/ASIC machines
 as selectable kinds. The **664 is skipped** (tiny library, awkward OS).
 
+## Status (2026-09-09)
+
+Stages 0–6 are **implemented and merged** (PRs #53–#65) — all with parity tests
+and shader self-checks, none yet checked against real Plus hardware / another
+emulator. Left: **split screen** (`SPLT` / `SSA`), deferred from Stage 4 as the
+murkiest detail (the SSA encoding and whether the raster counter continues
+across the split). Everything below is kept for reference; the checkboxes mark
+what shipped.
+
+- ✅ 0 machine-kind seam · ✅ 1a computer-Plus boot · ✅ 1b `.cpr` + GX4000
+- ✅ 2a ASIC unlock + register page · ✅ 2b 4096-colour palette
+- ✅ 3 hardware sprites (border sprites deferred)
+- ✅ 4 programmable raster interrupt · ✅ 4b soft scroll · ⬜ 4b split screen
+- ✅ 5 DMA sound (tempo approximate; DMA IRQ sets the pending bit only)
+- ✅ 6 GX4000 joypad
+
 ## Context
 
 Done: bare metal, Firmware (464), Firmware (6128) with 128K banking, `.dsk` and

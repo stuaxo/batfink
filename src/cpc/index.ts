@@ -6,6 +6,8 @@ export { makeBus } from './ports';
 export { emptyRomSet, updateRomPaging } from './rom';
 export type { RomSet } from './rom';
 export { setExtRam, setRamConfig, RAM_CONFIGS } from './banking';
+export { ASIC, ASIC_UNLOCK } from './asic';
+export type { Asic } from './asic';
 export { Fdc, Disc } from './fdc';
 export type { FdcState } from './fdc';
 export { Tape, readCdt } from './tape';

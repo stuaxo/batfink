@@ -17,6 +17,9 @@ export interface FrameView {
   /** Per-scanline palette snapshot: LINES_PER_FRAME * PENS_PER_LINE bytes,
    *  pens 0-15 then the border at index 16. Each line's opening colours. */
   linePens: Uint8Array;
+  /** With a Plus ASIC: the same snapshot as 12-bit colour, one Uint16 per
+   *  entry packed (R<<8)|(G<<4)|B. Null on a 464 / 6128 — use `linePens` then. */
+  linePal12: Uint16Array | null;
   /** Mid-frame pen writes as (line, cycle-in-line, pen, value) quads, in time
    *  order — for colour changes within a scanline. */
   paletteWrites: Int32Array;
@@ -29,6 +32,7 @@ export function frameView(m: CPCMachine): FrameView {
     mode: m.mode,
     crtc: m.crtc,
     linePens: m.linePens,
+    linePal12: m.asic ? m.linePal12 : null,
     paletteWrites: m.paletteWrites,
     paletteWriteCount: m.paletteWriteCount,
   };

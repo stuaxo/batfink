@@ -43,6 +43,8 @@ export interface CPCMachine {
   /** per-scanline palette snapshot (LINES_PER_FRAME * PENS_PER_LINE bytes),
    *  taken at the start of each line — the border and each row's opening colours. */
   linePens: Uint8Array;
+  /** the same, as the Plus 12-bit palette — filled and used only with an ASIC. */
+  linePal12: Uint16Array;
   /** Gate Array pen writes within the current frame, as (line, cycle-in-line,
    *  pen, value) quads, in time order. Lets the renderer place a colour change
    *  mid-scanline instead of only at line starts. Cleared each frame; the used
@@ -117,6 +119,7 @@ export function makeCPC(kind: MachineKind = 'cpc464'): CPCMachine {
     // Palette snapshot per scanline, so mid-frame ink changes (raster bars)
     // actually show up in the rendered picture.
     linePens: new Uint8Array(LINES_PER_FRAME * PENS_PER_LINE),
+    linePal12: new Uint16Array(LINES_PER_FRAME * PENS_PER_LINE),
     // ~1.6 writes per scanline before it saturates; a heavy raster demo that
     // overruns just loses its latest few mid-line changes, never crashes.
     paletteWrites: new Int32Array(512 * 4),
@@ -180,6 +183,7 @@ export function makeCPC(kind: MachineKind = 'cpc464'): CPCMachine {
     updateRomPaging(m);
     m.pens.fill(BLACK);
     m.linePens.fill(BLACK);
+    m.linePal12.fill(0);
     m.keys.fill(0xff);
     m.crtc.set(CRTC_DEFAULTS);
   };

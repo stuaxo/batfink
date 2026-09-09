@@ -40,7 +40,12 @@ export function makeBus(m: CPCMachine): Bus {
     // installs it for watchpoints and dirty-region tracking.
     write: (a, v) => {
       const asic = m.asic;
-      if (asic && asic.pageIn && a >= 0x4000 && a < 0x8000) { asic.regs[a - 0x4000] = v; return; }
+      if (asic && asic.pageIn && a >= 0x4000 && a < 0x8000) {
+        const off = a - 0x4000;
+        asic.regs[off] = v;
+        asic.onRegWrite(off);
+        return;
+      }
       m.ram[a] = v;
       if (m.onWrite) m.onWrite(a, v);
     },
@@ -49,7 +54,11 @@ export function makeBus(m: CPCMachine): Bus {
       if ((port & 0xc000) === 0x4000) { // Gate Array
         switch (v & 0xc0) {
           case 0x00: m.penSelect = (v & 0x10) ? 16 : (v & 0x0f); break;
-          case 0x40: m.pens[m.penSelect] = v & 0x1f; logPenWrite(m, m.penSelect, v & 0x1f); break;
+          case 0x40:
+            m.pens[m.penSelect] = v & 0x1f;
+            logPenWrite(m, m.penSelect, v & 0x1f);
+            m.asic?.gaInk(m.penSelect, v & 0x1f); // Plus: the ASIC owns the palette
+            break;
           case 0x80: m.mode = v & 0x03; m.gaConfig = v; updateRomPaging(m); break;
           case 0xc0: setRamConfig(m, v); break;
         }

@@ -1,5 +1,6 @@
 import type { Z80 } from '../z80/cpu';
 import type { CPCMachine } from './machine';
+import { ASIC } from './asic';
 import {
   CYCLES_PER_LINE, LINES_PER_FRAME, PENS_PER_LINE, INTERRUPT_LINES,
   VSYNC_START, VSYNC_LINES, RENDER_LINE,
@@ -31,15 +32,24 @@ function advance(cpu: Z80, m: CPCMachine, cycles: number): void {
     m.linePens.set(m.pens, m.lineCounter * PENS_PER_LINE);
     if (m.asic) m.linePal12.set(m.asic.pal12.subarray(0, PENS_PER_LINE), m.lineCounter * PENS_PER_LINE);
     m.vsync = m.lineCounter >= VSYNC_START && m.lineCounter < VSYNC_START + VSYNC_LINES;
-    m.interruptCounter++;
-    if (m.lineCounter === VSYNC_START + 2) {
-      // The Gate Array resynchronises its interrupt counter here, two HSYNCs
-      // after the start of VSYNC. This is what ties raster effects to the frame.
-      if (m.interruptCounter >= 32) cpu.interrupt();
+
+    // Plus: a non-zero PRI replaces the Gate Array's 6-per-frame cadence with
+    // one interrupt per frame at the chosen scanline (vector low byte from IVR).
+    const pri = m.asic?.unlocked ? m.asic.regs[ASIC.PRI] : 0;
+    if (pri) {
       m.interruptCounter = 0;
-    } else if (m.interruptCounter >= INTERRUPT_LINES) {
-      m.interruptCounter = 0;
-      cpu.interrupt();
+      if (m.lineCounter === pri) cpu.interrupt(m.asic!.regs[ASIC.IVR] & 0xfe);
+    } else {
+      m.interruptCounter++;
+      if (m.lineCounter === VSYNC_START + 2) {
+        // The Gate Array resynchronises its interrupt counter here, two HSYNCs
+        // after the start of VSYNC. This is what ties raster effects to the frame.
+        if (m.interruptCounter >= 32) cpu.interrupt();
+        m.interruptCounter = 0;
+      } else if (m.interruptCounter >= INTERRUPT_LINES) {
+        m.interruptCounter = 0;
+        cpu.interrupt();
+      }
     }
     if (m.lineCounter === RENDER_LINE) m.frameReady = true;
   }

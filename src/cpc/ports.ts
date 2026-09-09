@@ -28,6 +28,8 @@ export function makeBus(m: CPCMachine): Bus {
     // Hot path. With no ROM paged in (every current demo) both fields are null:
     // two checks, then RAM. Writes always land in RAM — see `write`.
     read: (a) => {
+      const asic = m.asic;
+      if (asic && asic.pageIn && a >= 0x4000 && a < 0x8000) return asic.regs[a - 0x4000];
       const lo = m.romLow;
       if (lo && a < 0x4000) return lo[a];
       const hi = m.romHigh;
@@ -36,7 +38,12 @@ export function makeBus(m: CPCMachine): Bus {
     },
     // m.onWrite is null in run mode (one predictable branch); the debugger
     // installs it for watchpoints and dirty-region tracking.
-    write: (a, v) => { m.ram[a] = v; if (m.onWrite) m.onWrite(a, v); },
+    write: (a, v) => {
+      const asic = m.asic;
+      if (asic && asic.pageIn && a >= 0x4000 && a < 0x8000) { asic.regs[a - 0x4000] = v; return; }
+      m.ram[a] = v;
+      if (m.onWrite) m.onWrite(a, v);
+    },
 
     out: (port, v) => {
       if ((port & 0xc000) === 0x4000) { // Gate Array
@@ -47,12 +54,15 @@ export function makeBus(m: CPCMachine): Bus {
           case 0xc0: setRamConfig(m, v); break;
         }
       } else if ((port & 0x4000) === 0 && (port & 0x8000) === 0x8000) {
-        // 0xBCxx-0xBFxx: CRTC 6845
+        // 0xBCxx-0xBFxx: CRTC 6845 — and the ASIC unlock sequence, on &BCxx.
         const fn = (port >> 8) & 3;
-        if (fn === 0) m.crtcSelect = v & 0x1f;
+        if (fn === 0) { m.crtcSelect = v & 0x1f; m.asic?.feedUnlock(v); }
         else if (fn === 1) m.crtc[m.crtcSelect] = v;
       } else if ((port & 0x2000) === 0) {
-        m.romSelect = v; updateRomPaging(m); // 0xDFxx: upper ROM number
+        m.romSelect = v; // 0xDFxx: upper ROM number
+        // Selecting &B8-&BF pages the ASIC register block over &4000-&7FFF.
+        if (m.asic?.unlocked) m.asic.pageIn = (v & 0xf8) === 0xb8;
+        updateRomPaging(m);
       } else if ((port & 0x0800) === 0) {
         // 0xF4xx-0xF7xx: PPI 8255
         const fn = (port >> 8) & 3;

@@ -9,6 +9,7 @@ import { makeBus } from './ports';
 import { renderFrame } from './video';
 import { type RomSet, emptyRomSet, updateRomPaging } from './rom';
 import { setRamConfig } from './banking';
+import { type Asic, makeAsic } from './asic';
 import { Fdc } from './fdc';
 import type { Tape } from './tape';
 
@@ -62,6 +63,9 @@ export interface CPCMachine {
   bankAt: Int8Array;
   /** true on a 6128 with 128K — RAM-config writes then re-page `ram`. */
   ram128: boolean;
+  /** Plus / GX4000 ASIC, or null on a 464 / 6128. Tracks the unlock sequence
+   *  and holds the 16K register page. */
+  asic: Asic | null;
   /** ROM images. Fixed hardware, not machine state; empty until a ROM PR. */
   roms: RomSet;
   /** Cartridge pages (16K each), or null. Fixed hardware like `roms`; the Plus
@@ -146,6 +150,7 @@ export function makeCPC(kind: MachineKind = 'cpc464'): CPCMachine {
     banks: null,
     bankAt: Int8Array.from([0, 1, 2, 3]),
     ram128: false,
+    asic: null,
     fdc: new Fdc(),
     tape: null,
   } as CPCMachine;
@@ -168,6 +173,10 @@ export function makeCPC(kind: MachineKind = 'cpc464'): CPCMachine {
     m.psgSelect = 0; m.psg.fill(0);
     m.fdc.reset();
     if (m.tape) m.tape.motorOn = false;
+    // The ASIC exists on the Plus family; keep the instance across resets but
+    // clear its state (a power-on locks it again).
+    m.asic = isPlus(m.kind) ? (m.asic ?? makeAsic()) : null;
+    m.asic?.reset();
     updateRomPaging(m);
     m.pens.fill(BLACK);
     m.linePens.fill(BLACK);

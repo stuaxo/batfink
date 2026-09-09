@@ -52,6 +52,8 @@ export interface MachineState {
   /** full 128K bank image when ram128; null otherwise (`ram` holds the 64K). */
   banks: Uint8Array | null;
   bankAt: number[];
+  /** Plus ASIC state (register page + unlock), or null off the Plus family. */
+  asic: { regs: Uint8Array; unlocked: boolean; pageIn: boolean; unlockProgress: number } | null;
   ppiA: number;
   ppiB: number;
   ppiC: number;
@@ -100,6 +102,12 @@ export function getState(cpu: Z80, m: CPCMachine): MachineState {
     ram128: m.ram128,
     banks: m.banks ? m.banks.slice() : null,
     bankAt: Array.from(m.bankAt),
+    asic: m.asic ? {
+      regs: m.asic.regs.slice(),
+      unlocked: m.asic.unlocked,
+      pageIn: m.asic.pageIn,
+      unlockProgress: m.asic.unlockProgress,
+    } : null,
     ppiA: m.ppiA, ppiB: m.ppiB, ppiC: m.ppiC, ppiControl: m.ppiControl,
     psgSelect: m.psgSelect,
     frameCycles: m.frameCycles,
@@ -153,6 +161,12 @@ export function setState(cpu: Z80, m: CPCMachine, s: MachineState): void {
     }
   } else {
     m.banks = null;
+  }
+  if (s.asic && m.asic) {
+    m.asic.regs.set(s.asic.regs);
+    m.asic.unlocked = s.asic.unlocked;
+    m.asic.pageIn = s.asic.pageIn;
+    m.asic.unlockProgress = s.asic.unlockProgress;
   }
   updateRomPaging(m); // re-derive romLow/romHigh from the restored config
   m.ppiA = s.ppiA; m.ppiB = s.ppiB; m.ppiC = s.ppiC; m.ppiControl = s.ppiControl;

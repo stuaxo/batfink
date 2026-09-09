@@ -64,6 +64,19 @@ describe('renderViewGL matches the software renderer', () => {
       m.bus.write(0x4000 + ASIC.PALETTE + e * 2, ((e * 5) & 0x0f) | (((e * 3) & 0x0f) << 4));
       m.bus.write(0x4000 + ASIC.PALETTE + e * 2 + 1, (e * 7) & 0x0f);
     }
+    // a couple of magnified sprites
+    for (let i = 0; i < 16 * 256; i++) m.asic!.regs[ASIC.SPRITE_DATA + i] = (i + 1) & 0x0f;
+    const spr = (s: number, pen0: number, x: number, y: number, mag: number) => {
+      void pen0;
+      const o = ASIC.SPRITE_ATTR + s * 8;
+      m.asic!.regs[o] = x & 0xff; m.asic!.regs[o + 1] = (x >> 8) & 0xff;
+      m.asic!.regs[o + 2] = y & 0xff; m.asic!.regs[o + 3] = (y >> 8) & 0xff;
+      m.asic!.regs[o + 4] = mag;
+    };
+    spr(0, 0, 40, 30, 0x05);   // 1x
+    spr(1, 0, 200, 90, 0x0e);  // 2x wide, 4x tall
+    spr(2, 0, -6, 150, 0x0a);  // clipped left, 2x
+
     m.bus.out(0xdf00, 0x00); // page the registers back out so the program runs
 
     for (let f = 0; f < 40; f++) runFrame(cpu, m);
@@ -74,7 +87,6 @@ describe('renderViewGL matches the software renderer', () => {
     renderView(frameView(m), soft);
     renderViewGL(frameView(m), gl);
     expect(firstDiff(soft, gl)).toBe(-1);
-    // and it is actually exercising 12-bit colour, not the 27-table
     expect(frameView(m).linePal12).not.toBeNull();
   });
 

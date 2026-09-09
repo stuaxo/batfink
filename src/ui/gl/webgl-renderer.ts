@@ -23,9 +23,12 @@ precision highp usampler2D; precision highp sampler2D;
 
 uniform usampler2D uRam;        // 256x256  ram[addr] = texel(addr&255, addr>>8)
 uniform usampler2D uLinePens;   // 17x312   linePens[line*17+pen] = texel(pen, line)
-uniform usampler2D uLinePal12;  // 17x312   Plus 12-bit palette, (R<<8)|(G<<4)|B
+uniform usampler2D uLinePal12;  // 17x312   Plus 12-bit screen palette, (R<<8)|(G<<4)|B
 uniform usampler2D uPixTable;   // 256x24   PIXEL_TABLES[mode][byte][dot] = texel(byte, mode*8+dot)
 uniform sampler2D  uPalette;    // 32x1     CPC_PALETTE, normalised
+uniform usampler2D uSprData;    // 256x16   sprite pixel data, texel(row*16+col, s)
+uniform usampler2D uSprAttr;    // 8x16     sprite attributes, texel(byte, s)
+uniform usampler2D uPal12;      // 32x1     full 12-bit palette (sprite inks 16-31)
 uniform int uCrtc1, uCrtc6, uCrtc12, uCrtc13, uMode, uPlus;
 
 out vec4 outColor;
@@ -35,13 +38,40 @@ const int H = ${HEIGHT};
 const int BX = 48;
 const int BY = 24;
 const int LINES = ${LINES_PER_FRAME};
+const int MAG[4] = int[4](0, 1, 2, 4);
+
+vec4 col12(uint c) {
+  return vec4(vec3(uvec3(c >> 8u, c >> 4u, c) & 15u) * (17.0 / 255.0), 1.0);
+}
+
+/** Top-most sprite pixel over picture (cx, cy) as a packed 12-bit colour, or -1. */
+int spritePix(int cx, int cy) {
+  if (uPlus == 0) return -1;
+  int dx = cx - BX;
+  int dy = (cy >> 1) - BY;
+  if (dx < 0 || dx >= 640 || dy < 0 || dy >= 200) return -1;
+  for (int s = 0; s < 16; s++) {
+    int mag = int(texelFetch(uSprAttr, ivec2(4, s), 0).r);
+    int mx = MAG[mag & 3];
+    int my = MAG[(mag >> 2) & 3];
+    if (mx == 0 || my == 0) continue;
+    int x = int(texelFetch(uSprAttr, ivec2(0, s), 0).r) | (int(texelFetch(uSprAttr, ivec2(1, s), 0).r) << 8);
+    int y = int(texelFetch(uSprAttr, ivec2(2, s), 0).r) | (int(texelFetch(uSprAttr, ivec2(3, s), 0).r) << 8);
+    if (x >= 0x8000) x -= 0x10000;
+    if (y >= 0x8000) y -= 0x10000;
+    int px = dx - x;
+    int py = dy - y;
+    if (px < 0 || px >= 16 * mx || py < 0 || py >= 16 * my) continue;
+    int pen = int(texelFetch(uSprData, ivec2((py / my) * 16 + (px / mx), s), 0).r) & 15;
+    if (pen == 0) continue;
+    return int(texelFetch(uPal12, ivec2(16 + pen, 0), 0).r);
+  }
+  return -1;
+}
 
 vec4 palOf(int line, int pen) {
   int l = ((line % LINES) + LINES) % LINES;
-  if (uPlus == 1) {
-    uint c = texelFetch(uLinePal12, ivec2(pen, l), 0).r;
-    return vec4(vec3(uvec3(c >> 8u, c >> 4u, c) & 15u) * (17.0 / 255.0), 1.0);
-  }
+  if (uPlus == 1) return col12(texelFetch(uLinePal12, ivec2(pen, l), 0).r);
   int idx = int(texelFetch(uLinePens, ivec2(pen, l), 0).r) & 31;
   return vec4(texelFetch(uPalette, ivec2(idx, 0), 0).rgb, 1.0);
 }
@@ -49,6 +79,10 @@ vec4 palOf(int line, int pen) {
 void main() {
   int cx = int(gl_FragCoord.x);
   int cy = H - 1 - int(gl_FragCoord.y);   // GL is bottom-up; our buffer is top-down
+
+  int sp = spritePix(cx, cy);
+  if (sp >= 0) { outColor = col12(uint(sp)); return; }
+
   int srcY = cy >> 1;                     // the picture is line-doubled
 
   if (srcY < BY) { outColor = palOf(LINES - BY + srcY, 16); return; }
@@ -114,6 +148,9 @@ export class WebGLRenderer implements Renderer {
   private readonly ram: WebGLTexture;
   private readonly linePens: WebGLTexture;
   private readonly linePal12: WebGLTexture;
+  private readonly sprData: WebGLTexture;
+  private readonly sprAttr: WebGLTexture;
+  private readonly pal12: WebGLTexture;
   private readonly u: Record<string, WebGLUniformLocation | null>;
 
   constructor(canvas: HTMLCanvasElement, opts: { selfCheck?: boolean } = {}) {
@@ -157,6 +194,12 @@ export class WebGLRenderer implements Renderer {
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, 32, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, paletteData);
     this.linePal12 = mkTex(4, 'uLinePal12');
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.R16UI, PENS_PER_LINE, LINES_PER_FRAME, 0, gl.RED_INTEGER, gl.UNSIGNED_SHORT, null);
+    this.sprData = mkTex(5, 'uSprData');
+    r8ui(256, 16, null);
+    this.sprAttr = mkTex(6, 'uSprAttr');
+    r8ui(8, 16, null);
+    this.pal12 = mkTex(7, 'uPal12');
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.R16UI, 32, 1, 0, gl.RED_INTEGER, gl.UNSIGNED_SHORT, null);
 
     this.u = {};
     for (const n of ['uCrtc1', 'uCrtc6', 'uCrtc12', 'uCrtc13', 'uMode', 'uPlus']) {
@@ -203,13 +246,18 @@ export class WebGLRenderer implements Renderer {
       compare(m, `mode ${L.mode}`);
     }
 
-    // Plus: the 12-bit-palette path
+    // Plus: the 12-bit palette and a couple of sprites
     const pm = makeCPC('gx4000');
     pm.reset();
     pm.mode = 1;
     for (let i = 0; i < pm.ram.length; i++) pm.ram[i] = (i * 11 + 5) & 0xff;
     for (let i = 0; i < pm.linePal12.length; i++) pm.linePal12[i] = (i * 37 + 7) & 0xfff;
     pm.crtc[1] = 40; pm.crtc[6] = 25; pm.crtc[12] = 0x30; pm.crtc[13] = 0;
+    const asic = pm.asic!;
+    for (let i = 0; i < asic.pal12.length; i++) asic.pal12[i] = (i * 111 + 9) & 0xfff;
+    for (let i = 0; i < 16 * 256; i++) asic.regs[i] = i & 0x0f;      // sprite pixels
+    asic.regs[0x2000 + 4] = 0x05; asic.regs[0x2000 + 0] = 30; asic.regs[0x2000 + 2] = 40; // sprite 0: 1x2 mag at (30,40)
+    asic.regs[0x2000 + 8 + 4] = 0x0a; asic.regs[0x2000 + 8 + 0] = 200; asic.regs[0x2000 + 8 + 2] = 100; // sprite 1: 2x4 mag
     compare(pm, 'plus');
   }
 
@@ -230,6 +278,15 @@ export class WebGLRenderer implements Renderer {
       gl.activeTexture(gl.TEXTURE4);
       gl.bindTexture(gl.TEXTURE_2D, this.linePal12);
       gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, PENS_PER_LINE, LINES_PER_FRAME, gl.RED_INTEGER, gl.UNSIGNED_SHORT, v.linePal12);
+      gl.activeTexture(gl.TEXTURE5);
+      gl.bindTexture(gl.TEXTURE_2D, this.sprData);
+      gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, 256, 16, gl.RED_INTEGER, gl.UNSIGNED_BYTE, v.spriteData!);
+      gl.activeTexture(gl.TEXTURE6);
+      gl.bindTexture(gl.TEXTURE_2D, this.sprAttr);
+      gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, 8, 16, gl.RED_INTEGER, gl.UNSIGNED_BYTE, v.spriteAttr!);
+      gl.activeTexture(gl.TEXTURE7);
+      gl.bindTexture(gl.TEXTURE_2D, this.pal12);
+      gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, 32, 1, gl.RED_INTEGER, gl.UNSIGNED_SHORT, v.spritePal12!);
     }
 
     gl.uniform1i(this.u.uCrtc1, v.crtc[1]);
@@ -248,5 +305,8 @@ export class WebGLRenderer implements Renderer {
     gl.deleteTexture(this.ram);
     gl.deleteTexture(this.linePens);
     gl.deleteTexture(this.linePal12);
+    gl.deleteTexture(this.sprData);
+    gl.deleteTexture(this.sprAttr);
+    gl.deleteTexture(this.pal12);
   }
 }

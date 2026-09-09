@@ -7,20 +7,26 @@
 // (FrameView.paletteWrites) are a software-renderer refinement; the WebGL path
 // renders each scanline from its opening palette (linePens).
 import {
-  CPC_PALETTE, PIXEL_TABLES, type FrameView,
+  CPC_PALETTE, PIXEL_TABLES, spritePixel, type FrameView,
   BORDER_X, BORDER_Y, WIDTH, HEIGHT, LINES_PER_FRAME, PENS_PER_LINE,
 } from '../../cpc';
+
+const rgb12 = (c: number): [number, number, number] =>
+  [((c >> 8) & 0xf) * 17, ((c >> 4) & 0xf) * 17, (c & 0xf) * 17];
 
 const P = PENS_PER_LINE;
 
 /** RGB for output pixel (cx, cy), 0 ≤ cx < WIDTH, 0 ≤ cy < HEIGHT. */
 export function glPixel(v: FrameView, cx: number, cy: number): [number, number, number] {
+  const sprite = spritePixel(v, cx, cy);
+  if (sprite >= 0) return rgb12(sprite);
+
   const srcY = cy >> 1; // the picture is line-doubled
   const p12 = v.linePal12;
 
   const colour = (line: number, pen: number): [number, number, number] => {
     const i = (line % LINES_PER_FRAME) * P + pen;
-    if (p12) { const c = p12[i]; return [((c >> 8) & 0xf) * 17, ((c >> 4) & 0xf) * 17, (c & 0xf) * 17]; }
+    if (p12) return rgb12(p12[i]);
     const c = CPC_PALETTE[v.linePens[i] & 0x1f];
     return [c[0], c[1], c[2]];
   };

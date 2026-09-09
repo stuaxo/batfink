@@ -51,8 +51,8 @@ export interface Asic {
   syncPalette(): void;
 }
 
-/** Screen palette entries: pens 0-15 plus the border at 16. 17-31 are sprites. */
-const SCREEN_ENTRIES = 17;
+/** 0-15 screen inks, 16 the border, 17-31 the sprite inks. */
+const PALETTE_ENTRIES = 32;
 
 /** Nearest 12-bit nibble for a Gate Array channel level (0 / 128 / 255). */
 const nib = (level: number): number => (level === 0 ? 0 : level >= 255 ? 15 : 8);
@@ -70,7 +70,7 @@ export function makeAsic(): Asic {
     unlocked: false,
     pageIn: false,
     unlockProgress: 0,
-    pal12: new Uint16Array(SCREEN_ENTRIES),
+    pal12: new Uint16Array(PALETTE_ENTRIES),
     reset() {
       this.regs.fill(0);
       this.unlocked = false;
@@ -90,7 +90,7 @@ export function makeAsic(): Asic {
     },
     onRegWrite(off: number) {
       const rel = off - ASIC.PALETTE;
-      if (rel >= 0 && rel < SCREEN_ENTRIES * 2) syncEntry(this, rel >> 1);
+      if (rel >= 0 && rel < PALETTE_ENTRIES * 2) syncEntry(this, rel >> 1);
     },
     gaInk(pen: number, hwColour: number) {
       const [r, g, b] = CPC_PALETTE[hwColour & 0x1f];
@@ -100,7 +100,7 @@ export function makeAsic(): Asic {
       syncEntry(this, pen);
     },
     syncPalette() {
-      for (let e = 0; e < SCREEN_ENTRIES; e++) syncEntry(this, e);
+      for (let e = 0; e < PALETTE_ENTRIES; e++) syncEntry(this, e);
     },
   };
   return a;

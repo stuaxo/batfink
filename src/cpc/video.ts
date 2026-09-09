@@ -6,6 +6,7 @@
 // 27-colour Gate Array table.
 import { CPC_PALETTE, type Rgb } from './palette';
 import { hwTo12 } from './asic';
+import { spritePixel } from './sprites';
 import { PIXEL_TABLES } from './pixels';
 import { BORDER_X, BORDER_Y, WIDTH, LINES_PER_FRAME, PENS_PER_LINE } from './constants';
 import type { CPCMachine } from './machine';
@@ -109,5 +110,20 @@ export function renderView(v: FrameView, rgba: Uint8ClampedArray): void {
     const o0 = ((200 + BORDER_Y + i) * 2) * WIDTH * 4;
     fillRow(o0, colourAt(line, 16));
     dbl(o0);
+  }
+
+  // Hardware sprites over the picture (Plus only; a no-op otherwise).
+  if (v.spriteData) {
+    for (let cy = BORDER_Y * 2; cy < (BORDER_Y + 200) * 2; cy++) {
+      for (let cx = BORDER_X; cx < BORDER_X + 640; cx++) {
+        const sp = spritePixel(v, cx, cy);
+        if (sp < 0) continue;
+        const o = (cy * WIDTH + cx) * 4;
+        rgba[o] = ((sp >> 8) & 0xf) * 17;
+        rgba[o + 1] = ((sp >> 4) & 0xf) * 17;
+        rgba[o + 2] = (sp & 0xf) * 17;
+        rgba[o + 3] = 255;
+      }
+    }
   }
 }

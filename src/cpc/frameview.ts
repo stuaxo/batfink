@@ -31,6 +31,11 @@ export interface FrameView {
   spriteData: Uint8Array | null;
   spriteAttr: Uint8Array | null;
   spritePal12: Uint16Array | null;
+  /** Plus soft scroll: the picture shifts right by `hscroll` mode-2 pixels
+   *  (0-15) and down by `vscroll` scanlines (0-7); the border fills the edge.
+   *  Both 0 off the Plus or with SSCR unset. */
+  hscroll: number;
+  vscroll: number;
 }
 
 export function frameView(m: CPCMachine): FrameView {
@@ -45,5 +50,7 @@ export function frameView(m: CPCMachine): FrameView {
     spriteData: m.asic ? m.asic.regs.subarray(ASIC.SPRITE_DATA, ASIC.SPRITE_DATA + 0x1000) : null,
     spriteAttr: m.asic ? m.asic.regs.subarray(ASIC.SPRITE_ATTR, ASIC.SPRITE_ATTR + 0x80) : null,
     spritePal12: m.asic ? m.asic.pal12 : null,
+    hscroll: m.asic ? m.asic.regs[ASIC.SSCR] & 0x0f : 0,
+    vscroll: m.asic ? (m.asic.regs[ASIC.SSCR] >> 4) & 0x07 : 0,
   };
 }

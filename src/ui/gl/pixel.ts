@@ -37,16 +37,19 @@ export function glPixel(v: FrameView, cx: number, cy: number): [number, number, 
   const y = srcY - BORDER_Y; // displayed row 0..199
 
   const rows = Math.min(v.crtc[6], 25) * 8;
-  const inPicture = cx >= BORDER_X && cx < BORDER_X + 640 && y < rows;
-  if (!inPicture) return colour(y, 16);
+  if (cx < BORDER_X || cx >= BORDER_X + 640 || y >= rows) return colour(y, 16);
+
+  // Soft scroll: the picture shifts right/down, the border shows through.
+  const dispX = cx - BORDER_X - v.hscroll;
+  const sy = y - v.vscroll;
+  if (dispX < 0 || sy < 0) return colour(y, 16);
 
   const base = (v.crtc[12] & 0x30) << 10;
   const offset = (((v.crtc[12] & 0x03) << 8) | v.crtc[13]) * 2;
   const bytesPerLine = v.crtc[1] * 2;
-  const raster = y & 7;
-  const lineStart = ((y >> 3) * bytesPerLine + offset) & 0x7ff;
+  const raster = sy & 7;
+  const lineStart = ((sy >> 3) * bytesPerLine + offset) & 0x7ff;
 
-  const dispX = cx - BORDER_X; // 0..639, always 80 bytes of 8 canvas px
   const b = dispX >> 3;
   const dotsPerByte = v.mode === 0 ? 2 : v.mode === 1 ? 4 : 8;
   const dot = Math.floor((dispX & 7) / (8 / dotsPerByte)); // 0..dotsPerByte-1

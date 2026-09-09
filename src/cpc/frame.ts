@@ -1,6 +1,7 @@
 import type { Z80 } from '../z80/cpu';
 import type { CPCMachine } from './machine';
 import { ASIC } from './asic';
+import { stepDma } from './asic-dma';
 import {
   CYCLES_PER_LINE, LINES_PER_FRAME, PENS_PER_LINE, INTERRUPT_LINES,
   VSYNC_START, VSYNC_LINES, RENDER_LINE,
@@ -82,6 +83,7 @@ export function runUntil(cpu: Z80, m: CPCMachine, cond: RunCondition): StopReaso
     steps++;
     const dt = cpu.tstates - before;
     if (onStep) onStep(pc, dt);
+    if (m.asic?.dmaOn) stepDma(m, dt);
     if (audio) audio.step(dt);
     if (tape) tape.advance(dt);
     advance(cpu, m, dt);

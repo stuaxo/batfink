@@ -1,6 +1,6 @@
 // Given a point on the rendered canvas, work out which screen byte the CRTC and
 // Gate Array are fetching for it, and where the pixel sits inside that byte.
-import type { CPCMachine } from '../cpc';
+import { type CPCMachine, ASIC } from '../cpc';
 import { BORDER_X, BORDER_Y } from '../cpc/constants';
 
 export interface ScreenHit {
@@ -19,8 +19,9 @@ const DOTS = [2, 4, 8];
 
 /** `cx`/`cy` are in canvas pixels (WIDTH x HEIGHT). Null outside the picture. */
 export function screenAddressAt(m: CPCMachine, cx: number, cy: number): ScreenHit | null {
-  const dispX = Math.floor(cx) - BORDER_X;
-  const row = Math.floor(cy / 2) - BORDER_Y; // the canvas is line-doubled
+  const sscr = m.asic ? m.asic.regs[ASIC.SSCR] : 0;
+  const dispX = Math.floor(cx) - BORDER_X - (sscr & 0x0f);
+  const row = Math.floor(cy / 2) - BORDER_Y - ((sscr >> 4) & 0x07); // canvas is line-doubled
   if (dispX < 0 || dispX >= 640 || row < 0 || row >= 200) return null;
 
   const mode = m.mode & 3;

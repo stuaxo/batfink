@@ -75,12 +75,13 @@ export function renderView(v: FrameView, rgba: Uint8ClampedArray): void {
     }
     const o0 = ((y + BORDER_Y) * 2) * WIDTH * 4;
     fillRow(o0, colourAt(y, 16));
-    if (y < rows) {
-      const raster = y & 7, charRow = y >> 3;
+    if (y < rows && y >= v.vscroll) {
+      const sy = y - v.vscroll; // soft scroll: shift the picture down
+      const raster = sy & 7, charRow = sy >> 3;
       const lineStart = (charRow * bytesPerLine + offset) & 0x7ff;
       const rw = midLine[y];
       let rwi = 0;
-      let x = BORDER_X;
+      let x = BORDER_X + v.hscroll; // ...and right; the border fills the gap
       for (let b = 0; b < 80 && x < BORDER_X + 640; b++) {
         if (rw) { // apply pen writes the raster has reached (2 T-states / byte)
           const reached = b * 2;
@@ -96,8 +97,10 @@ export function renderView(v: FrameView, rgba: Uint8ClampedArray): void {
         for (let i = 0; i < pix.length; i++) {
           const p = pix[i] * 3;
           for (let s = 0; s < scale; s++) {
-            const o = o0 + x * 4;
-            rgba[o] = rgb[p]; rgba[o + 1] = rgb[p + 1]; rgba[o + 2] = rgb[p + 2]; rgba[o + 3] = 255;
+            if (x < BORDER_X + 640) { // clip the right edge (matters with hscroll)
+              const o = o0 + x * 4;
+              rgba[o] = rgb[p]; rgba[o + 1] = rgb[p + 1]; rgba[o + 2] = rgb[p + 2]; rgba[o + 3] = 255;
+            }
             x++;
           }
         }

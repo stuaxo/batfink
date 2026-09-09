@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { makeCPC } from '../../src/cpc';
+import { makeCPC, ASIC, ASIC_UNLOCK } from '../../src/cpc';
 import { screenAddressAt } from '../../src/debug/screen';
 import { BORDER_X, BORDER_Y } from '../../src/cpc/constants';
 
@@ -44,5 +44,20 @@ describe('screenAddressAt', () => {
     m.crtc[13] = 10; // offset = 20 bytes
     const hit = screenAddressAt(m, BORDER_X, BORDER_Y * 2)!;
     expect(hit.addr).toBe(0xc000 + 20);
+  });
+
+  it('accounts for Plus soft scroll', () => {
+    const m = makeCPC('gx4000');
+    m.reset();
+    for (const b of ASIC_UNLOCK) m.bus.out(0xbc00, b);
+    m.bus.out(0xdf00, 0xb8);
+    m.bus.write(0x4000 + ASIC.SSCR, (2 << 4) | 4); // hscroll 4, vscroll 2
+    m.bus.out(0xdf00, 0x00);
+
+    // the picture's top-left pixel is now 4px right and 2 rows down
+    expect(screenAddressAt(m, BORDER_X, BORDER_Y * 2)).toBeNull(); // revealed border
+    const hit = screenAddressAt(m, BORDER_X + 4, (BORDER_Y + 2) * 2)!;
+    expect(hit.row).toBe(0);
+    expect(hit.byteCol).toBe(0);
   });
 });

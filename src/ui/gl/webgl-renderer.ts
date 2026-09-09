@@ -29,7 +29,7 @@ uniform sampler2D  uPalette;    // 32x1     CPC_PALETTE, normalised
 uniform usampler2D uSprData;    // 256x16   sprite pixel data, texel(row*16+col, s)
 uniform usampler2D uSprAttr;    // 8x16     sprite attributes, texel(byte, s)
 uniform usampler2D uPal12;      // 32x1     full 12-bit palette (sprite inks 16-31)
-uniform int uCrtc1, uCrtc6, uCrtc12, uCrtc13, uMode, uPlus;
+uniform int uCrtc1, uCrtc6, uCrtc12, uCrtc13, uMode, uPlus, uHscroll, uVscroll;
 
 out vec4 outColor;
 
@@ -90,16 +90,18 @@ void main() {
 
   int y = srcY - BY;
   int rows = min(uCrtc6, 25) * 8;
-  bool inPic = cx >= BX && cx < BX + 640 && y < rows;
-  if (!inPic) { outColor = palOf(y, 16); return; }
+  if (cx < BX || cx >= BX + 640 || y >= rows) { outColor = palOf(y, 16); return; }
+
+  int dispX = cx - BX - uHscroll;   // soft scroll: shift the picture right/down
+  int sy = y - uVscroll;
+  if (dispX < 0 || sy < 0) { outColor = palOf(y, 16); return; }
 
   int base = (uCrtc12 & 0x30) << 10;
   int offset = (((uCrtc12 & 0x03) << 8) | uCrtc13) * 2;
   int bytesPerLine = uCrtc1 * 2;
-  int raster = y & 7;
-  int lineStart = ((y >> 3) * bytesPerLine + offset) & 0x7ff;
+  int raster = sy & 7;
+  int lineStart = ((sy >> 3) * bytesPerLine + offset) & 0x7ff;
 
-  int dispX = cx - BX;
   int b = dispX >> 3;
   int dotsPerByte = uMode == 0 ? 2 : (uMode == 1 ? 4 : 8);
   int dot = (dispX & 7) / (8 / dotsPerByte);
@@ -202,7 +204,7 @@ export class WebGLRenderer implements Renderer {
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.R16UI, 32, 1, 0, gl.RED_INTEGER, gl.UNSIGNED_SHORT, null);
 
     this.u = {};
-    for (const n of ['uCrtc1', 'uCrtc6', 'uCrtc12', 'uCrtc13', 'uMode', 'uPlus']) {
+    for (const n of ['uCrtc1', 'uCrtc6', 'uCrtc12', 'uCrtc13', 'uMode', 'uPlus', 'uHscroll', 'uVscroll']) {
       this.u[n] = gl.getUniformLocation(this.prog, n);
     }
     gl.bindVertexArray(gl.createVertexArray());
@@ -258,6 +260,7 @@ export class WebGLRenderer implements Renderer {
     for (let i = 0; i < 16 * 256; i++) asic.regs[i] = i & 0x0f;      // sprite pixels
     asic.regs[0x2000 + 4] = 0x05; asic.regs[0x2000 + 0] = 30; asic.regs[0x2000 + 2] = 40; // sprite 0: 1x2 mag at (30,40)
     asic.regs[0x2000 + 8 + 4] = 0x0a; asic.regs[0x2000 + 8 + 0] = 200; asic.regs[0x2000 + 8 + 2] = 100; // sprite 1: 2x4 mag
+    asic.regs[0x2804] = (5 << 4) | 11; // SSCR: hscroll 11, vscroll 5
     compare(pm, 'plus');
   }
 
@@ -295,6 +298,8 @@ export class WebGLRenderer implements Renderer {
     gl.uniform1i(this.u.uCrtc13, v.crtc[13]);
     gl.uniform1i(this.u.uMode, v.mode);
     gl.uniform1i(this.u.uPlus, plus ? 1 : 0);
+    gl.uniform1i(this.u.uHscroll, v.hscroll);
+    gl.uniform1i(this.u.uVscroll, v.vscroll);
 
     gl.drawArrays(gl.TRIANGLES, 0, 3);
   }

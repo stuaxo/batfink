@@ -76,6 +76,7 @@ describe('renderViewGL matches the software renderer', () => {
     spr(0, 0, 40, 30, 0x05);   // 1x
     spr(1, 0, 200, 90, 0x0e);  // 2x wide, 4x tall
     spr(2, 0, -6, 150, 0x0a);  // clipped left, 2x
+    m.bus.write(0x4000 + ASIC.SSCR, (5 << 4) | 13); // soft scroll: hscroll 13, vscroll 5
 
     m.bus.out(0xdf00, 0x00); // page the registers back out so the program runs
 

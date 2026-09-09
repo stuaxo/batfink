@@ -6,6 +6,7 @@
 // The palette model widens here when per-microsecond splits land
 // (plan/webgl-renderer.md Stage 3).
 import type { CPCMachine } from './machine';
+import { ASIC } from './asic';
 
 export interface FrameView {
   /** 64K screen source. Live reference — do not write. */
@@ -24,6 +25,12 @@ export interface FrameView {
    *  order — for colour changes within a scanline. */
   paletteWrites: Int32Array;
   paletteWriteCount: number;
+  /** Plus hardware sprites, or null off the Plus family: 16 x 256 bytes of
+   *  4bpp pixel data, 16 x 8 bytes of attributes, and the full 32-entry
+   *  12-bit palette (sprite inks are entries 16-31). */
+  spriteData: Uint8Array | null;
+  spriteAttr: Uint8Array | null;
+  spritePal12: Uint16Array | null;
 }
 
 export function frameView(m: CPCMachine): FrameView {
@@ -35,5 +42,8 @@ export function frameView(m: CPCMachine): FrameView {
     linePal12: m.asic ? m.linePal12 : null,
     paletteWrites: m.paletteWrites,
     paletteWriteCount: m.paletteWriteCount,
+    spriteData: m.asic ? m.asic.regs.subarray(ASIC.SPRITE_DATA, ASIC.SPRITE_DATA + 0x1000) : null,
+    spriteAttr: m.asic ? m.asic.regs.subarray(ASIC.SPRITE_ATTR, ASIC.SPRITE_ATTR + 0x80) : null,
+    spritePal12: m.asic ? m.asic.pal12 : null,
   };
 }

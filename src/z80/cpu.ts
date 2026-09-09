@@ -25,8 +25,10 @@ export interface Z80 {
   reset(): void;
   /** Execute one instruction. Returns the (rounded) T-states it took. */
   step(): number;
-  /** Raise a maskable interrupt. Returns T-states consumed (0 if masked). */
-  interrupt(): number;
+  /** Raise a maskable interrupt. `vec` is the IM 2 vector low byte (the CPC
+   *  Gate Array floats &FF; the Plus ASIC drives it). Returns T-states
+   *  consumed (0 if masked). */
+  interrupt(vec?: number): number;
   getHL(): number;
   getBC(): number;
   getDE(): number;
@@ -496,12 +498,12 @@ export function makeZ80(bus: Bus): Z80 {
 
   cpu.reset = reset;
   cpu.step = step;
-  cpu.interrupt = function (): number {
+  cpu.interrupt = function (vec = 0xFF): number {
     if (!cpu.IFF1) return 0;
     if (cpu.halted) { cpu.halted = false; cpu.PC = (cpu.PC + 1) & 0xFFFF; }
     cpu.IFF1 = cpu.IFF2 = 0;
     if (cpu.IM === 2) {
-      const v = (cpu.I << 8) | 0xFF;
+      const v = (cpu.I << 8) | (vec & 0xFF);
       push(cpu.PC); cpu.PC = rd(v) | (rd(v + 1) << 8);
       cpu.tstates += 20; return 20;
     }

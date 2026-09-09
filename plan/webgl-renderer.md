@@ -4,6 +4,16 @@ Prerequisite for [`plus-range.md`](plus-range.md) Stages 2+. Two things the
 canvas-2D scanline renderer can't do: mid-line colour splits (it snapshots the
 palette once per scanline) and per-pixel sprite compositing at 50fps.
 
+## Status (2026-09-09)
+
+Stages 1–4 **implemented and merged** (PRs #50–#58). Stage 5 (ASIC compositing:
+4096-colour palette, sprites, soft scroll in the shader) landed alongside the
+plus-range stages that need it rather than as a separate step. The software
+renderer stays the reference; `glPixel` (`src/ui/gl/pixel.ts`) is held
+byte-identical to it by `test/ui/gl/parity.test.ts`, and the WebGL renderer
+self-checks against `glPixel` on construction, falling back to software on any
+mismatch. `?renderer=software` forces the reference path.
+
 ## Principles
 
 - **The software renderer stays.** `renderFrame` in `src/cpc/video.ts` remains

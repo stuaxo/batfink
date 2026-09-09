@@ -21,11 +21,12 @@ const FRAG = `#version 300 es
 precision highp float; precision highp int;
 precision highp usampler2D; precision highp sampler2D;
 
-uniform usampler2D uRam;       // 256x256  ram[addr] = texel(addr&255, addr>>8)
-uniform usampler2D uLinePens;  // 17x312   linePens[line*17+pen] = texel(pen, line)
-uniform usampler2D uPixTable;  // 256x24   PIXEL_TABLES[mode][byte][dot] = texel(byte, mode*8+dot)
-uniform sampler2D  uPalette;   // 32x1     CPC_PALETTE, normalised
-uniform int uCrtc1, uCrtc6, uCrtc12, uCrtc13, uMode;
+uniform usampler2D uRam;        // 256x256  ram[addr] = texel(addr&255, addr>>8)
+uniform usampler2D uLinePens;   // 17x312   linePens[line*17+pen] = texel(pen, line)
+uniform usampler2D uLinePal12;  // 17x312   Plus 12-bit palette, (R<<8)|(G<<4)|B
+uniform usampler2D uPixTable;   // 256x24   PIXEL_TABLES[mode][byte][dot] = texel(byte, mode*8+dot)
+uniform sampler2D  uPalette;    // 32x1     CPC_PALETTE, normalised
+uniform int uCrtc1, uCrtc6, uCrtc12, uCrtc13, uMode, uPlus;
 
 out vec4 outColor;
 
@@ -35,12 +36,14 @@ const int BX = 48;
 const int BY = 24;
 const int LINES = ${LINES_PER_FRAME};
 
-int linePen(int line, int pen) {
-  int l = ((line % LINES) + LINES) % LINES;
-  return int(texelFetch(uLinePens, ivec2(pen, l), 0).r);
-}
 vec4 palOf(int line, int pen) {
-  return vec4(texelFetch(uPalette, ivec2(linePen(line, pen) & 31, 0), 0).rgb, 1.0);
+  int l = ((line % LINES) + LINES) % LINES;
+  if (uPlus == 1) {
+    uint c = texelFetch(uLinePal12, ivec2(pen, l), 0).r;
+    return vec4(vec3(uvec3(c >> 8u, c >> 4u, c) & 15u) * (17.0 / 255.0), 1.0);
+  }
+  int idx = int(texelFetch(uLinePens, ivec2(pen, l), 0).r) & 31;
+  return vec4(texelFetch(uPalette, ivec2(idx, 0), 0).rgb, 1.0);
 }
 
 void main() {
@@ -110,6 +113,7 @@ export class WebGLRenderer implements Renderer {
   private readonly prog: WebGLProgram;
   private readonly ram: WebGLTexture;
   private readonly linePens: WebGLTexture;
+  private readonly linePal12: WebGLTexture;
   private readonly u: Record<string, WebGLUniformLocation | null>;
 
   constructor(canvas: HTMLCanvasElement, opts: { selfCheck?: boolean } = {}) {
@@ -151,9 +155,11 @@ export class WebGLRenderer implements Renderer {
     r8ui(256, 24, pixTableData);
     mkTex(3, 'uPalette');
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, 32, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, paletteData);
+    this.linePal12 = mkTex(4, 'uLinePal12');
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.R16UI, PENS_PER_LINE, LINES_PER_FRAME, 0, gl.RED_INTEGER, gl.UNSIGNED_SHORT, null);
 
     this.u = {};
-    for (const n of ['uCrtc1', 'uCrtc6', 'uCrtc12', 'uCrtc13', 'uMode']) {
+    for (const n of ['uCrtc1', 'uCrtc6', 'uCrtc12', 'uCrtc13', 'uMode', 'uPlus']) {
       this.u[n] = gl.getUniformLocation(this.prog, n);
     }
     gl.bindVertexArray(gl.createVertexArray());
@@ -166,36 +172,45 @@ export class WebGLRenderer implements Renderer {
    *  so createRenderer falls back to software. Covers every mode and a couple of
    *  CRTC layouts — this is the only guard on the transcribed shader. */
   private selfCheck(): void {
-    const m = makeCPC();
-    m.reset();
-    for (let i = 0; i < m.ram.length; i++) m.ram[i] = (i * 7 + 13) & 0xff;
-    for (let i = 0; i < m.linePens.length; i++) m.linePens[i] = (i * 5 + 1) & 0x1f;
-
-    const layouts = [
-      { mode: 0, r1: 40, r6: 25, r12: 0x30, r13: 0 },
-      { mode: 1, r1: 40, r6: 25, r12: 0x0c, r13: 40 },
-      { mode: 2, r1: 32, r6: 20, r12: 0x20, r13: 5 },
-    ];
     const gpu = new Uint8Array(WIDTH * HEIGHT * 4);
     const cpu = new Uint8ClampedArray(WIDTH * HEIGHT * 4);
-
-    for (const L of layouts) {
-      m.mode = L.mode;
-      m.crtc[1] = L.r1; m.crtc[6] = L.r6; m.crtc[12] = L.r12; m.crtc[13] = L.r13;
+    const compare = (m: CPCMachine, tag: string) => {
       this.draw(m);
       this.gl.readPixels(0, 0, WIDTH, HEIGHT, this.gl.RGBA, this.gl.UNSIGNED_BYTE, gpu);
       renderViewGL(frameView(m), cpu);
-
       for (let row = 0; row < HEIGHT; row++) {
         const g = (HEIGHT - 1 - row) * WIDTH * 4; // readPixels is bottom-up
         const c = row * WIDTH * 4;
         for (let i = 0; i < WIDTH * 4; i++) {
           if (gpu[g + i] !== cpu[c + i]) {
-            throw new Error(`self-check mismatch (mode ${L.mode}) at x=${(i >> 2)} y=${row}: ${gpu[g + i]} vs ${cpu[c + i]}`);
+            throw new Error(`self-check mismatch (${tag}) at x=${i >> 2} y=${row}: ${gpu[g + i]} vs ${cpu[c + i]}`);
           }
         }
       }
+    };
+
+    const m = makeCPC();
+    m.reset();
+    for (let i = 0; i < m.ram.length; i++) m.ram[i] = (i * 7 + 13) & 0xff;
+    for (let i = 0; i < m.linePens.length; i++) m.linePens[i] = (i * 5 + 1) & 0x1f;
+    for (const L of [
+      { mode: 0, r1: 40, r6: 25, r12: 0x30, r13: 0 },
+      { mode: 1, r1: 40, r6: 25, r12: 0x0c, r13: 40 },
+      { mode: 2, r1: 32, r6: 20, r12: 0x20, r13: 5 },
+    ]) {
+      m.mode = L.mode;
+      m.crtc[1] = L.r1; m.crtc[6] = L.r6; m.crtc[12] = L.r12; m.crtc[13] = L.r13;
+      compare(m, `mode ${L.mode}`);
     }
+
+    // Plus: the 12-bit-palette path
+    const pm = makeCPC('gx4000');
+    pm.reset();
+    pm.mode = 1;
+    for (let i = 0; i < pm.ram.length; i++) pm.ram[i] = (i * 11 + 5) & 0xff;
+    for (let i = 0; i < pm.linePal12.length; i++) pm.linePal12[i] = (i * 37 + 7) & 0xfff;
+    pm.crtc[1] = 40; pm.crtc[6] = 25; pm.crtc[12] = 0x30; pm.crtc[13] = 0;
+    compare(pm, 'plus');
   }
 
   draw(m: CPCMachine): void {
@@ -210,11 +225,19 @@ export class WebGLRenderer implements Renderer {
     gl.bindTexture(gl.TEXTURE_2D, this.linePens);
     gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, PENS_PER_LINE, LINES_PER_FRAME, gl.RED_INTEGER, gl.UNSIGNED_BYTE, v.linePens);
 
+    const plus = v.linePal12 != null;
+    if (plus) {
+      gl.activeTexture(gl.TEXTURE4);
+      gl.bindTexture(gl.TEXTURE_2D, this.linePal12);
+      gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, PENS_PER_LINE, LINES_PER_FRAME, gl.RED_INTEGER, gl.UNSIGNED_SHORT, v.linePal12);
+    }
+
     gl.uniform1i(this.u.uCrtc1, v.crtc[1]);
     gl.uniform1i(this.u.uCrtc6, v.crtc[6]);
     gl.uniform1i(this.u.uCrtc12, v.crtc[12]);
     gl.uniform1i(this.u.uCrtc13, v.crtc[13]);
     gl.uniform1i(this.u.uMode, v.mode);
+    gl.uniform1i(this.u.uPlus, plus ? 1 : 0);
 
     gl.drawArrays(gl.TRIANGLES, 0, 3);
   }
@@ -224,5 +247,6 @@ export class WebGLRenderer implements Renderer {
     gl.deleteProgram(this.prog);
     gl.deleteTexture(this.ram);
     gl.deleteTexture(this.linePens);
+    gl.deleteTexture(this.linePal12);
   }
 }

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { makeZ80 } from '../../src/z80/cpu';
-import { makeCPC, getState, setState, ASIC, ASIC_UNLOCK } from '../../src/cpc';
+import { makeCPC, getState, setState, ASIC, ASIC_UNLOCK, hwTo12 } from '../../src/cpc';
 
 const unlock = (m: ReturnType<typeof makeCPC>, seq: readonly number[] = ASIC_UNLOCK) => {
   for (const b of seq) m.bus.out(0xbc00, b);
@@ -66,6 +66,25 @@ describe('ASIC', () => {
     expect(m.asic!.unlocked).toBe(false);
     expect(m.asic!.pageIn).toBe(false);
     expect(m.asic!.regs[ASIC.PALETTE]).toBe(0);
+  });
+
+  it('a direct palette-register write updates pal12', () => {
+    const m = makeCPC('gx4000');
+    unlock(m);
+    m.bus.out(0xdf00, 0xb8);
+    // entry 3: GGGGRRRR = 0xA5 (G=10, R=5), ----BBBB = 0x0C (B=12)
+    m.bus.write(0x4000 + ASIC.PALETTE + 6, 0xa5);
+    m.bus.write(0x4000 + ASIC.PALETTE + 7, 0x0c);
+    expect(m.asic!.pal12[3]).toBe((5 << 8) | (10 << 4) | 12);
+  });
+
+  it('a Gate Array ink write feeds the ASIC palette on a Plus', () => {
+    const m = makeCPC('plus6128');
+    m.bus.out(0x7f00, 0x00);       // select pen 0
+    m.bus.out(0x7f00, 0x40 | 26);  // ink 26 = bright yellow
+    expect(m.asic!.pal12[0]).toBe(hwTo12(26));
+    // pen 0 still tracked classically too
+    expect(m.pens[0]).toBe(26);
   });
 
   it('round-trips through getState / setState', () => {

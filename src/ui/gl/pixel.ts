@@ -16,24 +16,23 @@ const P = PENS_PER_LINE;
 /** RGB for output pixel (cx, cy), 0 ≤ cx < WIDTH, 0 ≤ cy < HEIGHT. */
 export function glPixel(v: FrameView, cx: number, cy: number): [number, number, number] {
   const srcY = cy >> 1; // the picture is line-doubled
+  const p12 = v.linePal12;
 
-  const borderOf = (line: number): [number, number, number] => {
-    const c = CPC_PALETTE[v.linePens[(line % LINES_PER_FRAME) * P + 16] & 0x1f];
+  const colour = (line: number, pen: number): [number, number, number] => {
+    const i = (line % LINES_PER_FRAME) * P + pen;
+    if (p12) { const c = p12[i]; return [((c >> 8) & 0xf) * 17, ((c >> 4) & 0xf) * 17, (c & 0xf) * 17]; }
+    const c = CPC_PALETTE[v.linePens[i] & 0x1f];
     return [c[0], c[1], c[2]];
   };
 
-  if (srcY < BORDER_Y) return borderOf(LINES_PER_FRAME - BORDER_Y + srcY);
-  if (srcY >= BORDER_Y + 200) return borderOf(200 + (srcY - BORDER_Y - 200));
+  if (srcY < BORDER_Y) return colour(LINES_PER_FRAME - BORDER_Y + srcY, 16);
+  if (srcY >= BORDER_Y + 200) return colour(200 + (srcY - BORDER_Y - 200), 16);
 
   const y = srcY - BORDER_Y; // displayed row 0..199
-  const lp = y * P;
 
   const rows = Math.min(v.crtc[6], 25) * 8;
   const inPicture = cx >= BORDER_X && cx < BORDER_X + 640 && y < rows;
-  if (!inPicture) {
-    const c = CPC_PALETTE[v.linePens[lp + 16] & 0x1f];
-    return [c[0], c[1], c[2]];
-  }
+  if (!inPicture) return colour(y, 16);
 
   const base = (v.crtc[12] & 0x30) << 10;
   const offset = (((v.crtc[12] & 0x03) << 8) | v.crtc[13]) * 2;
@@ -48,8 +47,7 @@ export function glPixel(v: FrameView, cx: number, cy: number): [number, number, 
 
   const addr = base + raster * 0x800 + ((lineStart + b) & 0x7ff);
   const pen = PIXEL_TABLES[v.mode][v.ram[addr]][dot];
-  const c = CPC_PALETTE[v.linePens[lp + pen] & 0x1f];
-  return [c[0], c[1], c[2]];
+  return colour(y, pen);
 }
 
 /** Fill an RGBA buffer pixel by pixel — the algorithm the shader runs. */

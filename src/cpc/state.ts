@@ -38,6 +38,8 @@ export interface MachineState {
   psg: Uint8Array;
   keys: Uint8Array;
   linePens: Uint8Array;
+  /** Plus 12-bit per-scanline palette, or null off the Plus family. */
+  linePal12: Uint16Array | null;
   /** the used span of m.paletteWrites (paletteWriteCount * 4 entries). */
   paletteWrites: Int32Array;
   mode: number;
@@ -90,6 +92,7 @@ export function getState(cpu: Z80, m: CPCMachine): MachineState {
     psg: m.psg.slice(),
     keys: m.keys.slice(),
     linePens: m.linePens.slice(),
+    linePal12: m.asic ? m.linePal12.slice() : null,
     paletteWrites: m.paletteWrites.slice(0, m.paletteWriteCount * 4),
     mode: m.mode,
     penSelect: m.penSelect,
@@ -140,6 +143,7 @@ export function setState(cpu: Z80, m: CPCMachine, s: MachineState): void {
   m.psg.set(s.psg);
   m.keys.set(s.keys);
   m.linePens.set(s.linePens);
+  if (s.linePal12) m.linePal12.set(s.linePal12);
   m.paletteWrites.set(s.paletteWrites);
   m.paletteWriteCount = s.paletteWrites.length / 4;
   m.mode = s.mode;
@@ -167,6 +171,7 @@ export function setState(cpu: Z80, m: CPCMachine, s: MachineState): void {
     m.asic.unlocked = s.asic.unlocked;
     m.asic.pageIn = s.asic.pageIn;
     m.asic.unlockProgress = s.asic.unlockProgress;
+    m.asic.syncPalette(); // rebuild pal12 from the restored registers
   }
   updateRomPaging(m); // re-derive romLow/romHigh from the restored config
   m.ppiA = s.ppiA; m.ppiB = s.ppiB; m.ppiC = s.ppiC; m.ppiControl = s.ppiControl;

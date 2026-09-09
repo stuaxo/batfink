@@ -29,6 +29,7 @@ function advance(cpu: Z80, m: CPCMachine, cycles: number): void {
     m.frameCycles -= CYCLES_PER_LINE;
     m.lineCounter = (m.lineCounter + 1) % LINES_PER_FRAME;
     m.linePens.set(m.pens, m.lineCounter * PENS_PER_LINE);
+    if (m.asic) m.linePal12.set(m.asic.pal12, m.lineCounter * PENS_PER_LINE);
     m.vsync = m.lineCounter >= VSYNC_START && m.lineCounter < VSYNC_START + VSYNC_LINES;
     m.interruptCounter++;
     if (m.lineCounter === VSYNC_START + 2) {

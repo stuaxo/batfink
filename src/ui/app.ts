@@ -862,6 +862,7 @@ export function startApp(opts: AppOptions = {}): void {
 
   attachKeyboard({
     isEditing: () => editor.hasFocus(),
+    joypad: () => machineKind === 'gx4000',
     onKey: (line, bit, down) => {
       if (timeline.reviewing) return; // ignore live keys while scrubbing history
       machine.setKey(line, bit, down);

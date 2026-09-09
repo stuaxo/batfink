@@ -4,6 +4,7 @@
 // emulators; this one is ours.
 import type { Z80 } from '../z80/cpu';
 import type { CPCMachine, MachineKind } from './machine';
+import type { DmaChannel } from './asic';
 import { updateRomPaging } from './rom';
 import { flushBanks } from './banking';
 import type { FdcState } from './fdc';
@@ -54,8 +55,11 @@ export interface MachineState {
   /** full 128K bank image when ram128; null otherwise (`ram` holds the 64K). */
   banks: Uint8Array | null;
   bankAt: number[];
-  /** Plus ASIC state (register page + unlock), or null off the Plus family. */
-  asic: { regs: Uint8Array; unlocked: boolean; pageIn: boolean; unlockProgress: number } | null;
+  /** Plus ASIC state (register page + unlock + DMA), or null off the Plus. */
+  asic: {
+    regs: Uint8Array; unlocked: boolean; pageIn: boolean; unlockProgress: number;
+    dma: DmaChannel[]; dmaOn: boolean;
+  } | null;
   ppiA: number;
   ppiB: number;
   ppiC: number;
@@ -110,6 +114,8 @@ export function getState(cpu: Z80, m: CPCMachine): MachineState {
       unlocked: m.asic.unlocked,
       pageIn: m.asic.pageIn,
       unlockProgress: m.asic.unlockProgress,
+      dma: m.asic.dma.map((c) => ({ ...c })),
+      dmaOn: m.asic.dmaOn,
     } : null,
     ppiA: m.ppiA, ppiB: m.ppiB, ppiC: m.ppiC, ppiControl: m.ppiControl,
     psgSelect: m.psgSelect,
@@ -171,6 +177,8 @@ export function setState(cpu: Z80, m: CPCMachine, s: MachineState): void {
     m.asic.unlocked = s.asic.unlocked;
     m.asic.pageIn = s.asic.pageIn;
     m.asic.unlockProgress = s.asic.unlockProgress;
+    m.asic.dma.forEach((c, i) => Object.assign(c, s.asic!.dma[i]));
+    m.asic.dmaOn = s.asic.dmaOn;
     m.asic.syncPalette(); // rebuild pal12 from the restored registers
   }
   updateRomPaging(m); // re-derive romLow/romHigh from the restored config
